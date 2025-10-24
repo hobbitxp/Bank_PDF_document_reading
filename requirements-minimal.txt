@@ -1,0 +1,11 @@
+# Bank Statement Analyzer - Dependencies
+
+# PDF Processing
+PyMuPDF>=1.26.0
+
+# AI Analysis
+anthropic>=0.71.0
+
+# Data Analysis (for salary detection)
+pandas>=2.0.0
+openpyxl>=3.1.0
