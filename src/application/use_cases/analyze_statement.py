@@ -121,49 +121,47 @@ class AnalyzeStatementUseCase:
                 
                 # Save analysis to database
                 await self.database.save_analysis(
-                    analysis_id=analysis_id,
                     user_id=user_id,
-                    pdf_s3_key=object_key if upload_to_storage else None,
                     detected_salary=analysis.detected_amount,
-                    confidence_level=analysis.confidence,
+                    confidence=analysis.confidence,
                     transactions_analyzed=analysis.transactions_analyzed,
+                    credit_transactions=len(masked_statement.get_credit_transactions()),
+                    debit_transactions=len(masked_statement.get_debit_transactions()),
                     clusters_found=analysis.clusters_found,
                     top_candidates_count=len(analysis.best_candidates),
+                    expected_gross=expected_gross,
                     matches_expected=analysis.matches_expected,
-                    expected_salary=expected_gross,
-                    difference_amount=analysis.difference,
+                    difference=analysis.difference,
                     difference_percentage=analysis.difference_percentage,
-                    masked_items_count=masked_statement.masked_items_count,
-                    pages_processed=len(masked_statement.pages),
+                    employer=employer,
                     pvd_rate=pvd_rate,
                     extra_deductions=extra_deductions,
-                    employer_name=employer,
+                    pdf_filename=Path(pdf_path).name,
+                    pages_processed=len(masked_statement.pages),
+                    masked_items=masked_statement.masked_items_count,
                     metadata=metadata
                 )
                 
                 # Save audit log
                 await self.database.save_audit_log(
                     user_id=user_id,
-                    action="analyze_statement",
-                    resource_type="analysis",
-                    resource_id=analysis_id,
+                    analysis_id=None,  # Will be set by database after save_analysis returns UUID
+                    action="analyze_upload",
                     status="success",
                     request_payload={
-                        "pdf_path": Path(pdf_path).name,
+                        "pdf_filename": Path(pdf_path).name,
                         "expected_gross": expected_gross,
-                        "employer": employer
-                    },
-                    response_data={
-                        "detected_salary": analysis.detected_amount,
-                        "confidence": analysis.confidence
-                    },
-                    ip_address=None,  # Will be set by API layer
-                    user_agent=None   # Will be set by API layer
+                        "employer": employer,
+                        "pvd_rate": pvd_rate,
+                        "extra_deductions": extra_deductions
+                    }
                 )
                 
             except Exception as e:
                 # Log error but don't fail the whole operation
-                print(f"Database save failed: {e}")
+                print(f"❌ Database save failed: {e}")
+                import traceback
+                traceback.print_exc()
                 
                 # Try to log the error
                 if self.database:
@@ -181,6 +179,8 @@ class AnalyzeStatementUseCase:
                         )
                     except:
                         pass  # Ignore audit log errors
+        else:
+            print(f"⚠️  DEBUG: Database not available (self.database is None), skipping save")
         
         # 6. Build response
         return {

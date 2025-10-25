@@ -21,6 +21,7 @@ markers = [
     "unit: Unit tests with mocked dependencies (default)",
     "slow: Tests that take significant time to run",
     "api: API endpoint tests",
+    "e2e: End-to-end tests with full Docker stack (API + DB + S3)",
 ]
 
 # Asyncio configuration

@@ -51,3 +51,13 @@ test_results/
 tmp/
 temp/
 *.tmp
+
+# Test output files - DO NOT COMMIT (contains unmasked data)
+src/data/json/*_mapping.json
+src/data/json/*_masked.json
+src/data/json/*_analysis.json
+src/data/storage/**/*_mapping.json
+src/data/storage/**/*_masked.json
+src/data/storage/**/*_analysis.json
+src/data/storage/**/*.meta.json
+

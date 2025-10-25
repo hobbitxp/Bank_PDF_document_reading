@@ -29,6 +29,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    volumes:
+      # Mount source code for development (hot reload)
+      - ./src:/app/src:ro
     networks:
       - bank_network
     restart: unless-stopped
