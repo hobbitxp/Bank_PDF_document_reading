@@ -9,12 +9,42 @@ from application.ports.pdf_extractor import IPDFExtractor
 from application.ports.data_masker import IDataMasker
 from application.ports.salary_analyzer import ISalaryAnalyzer
 from application.ports.storage import IStorage
+from application.ports.database import IDatabase
 from application.use_cases.analyze_statement import AnalyzeStatementUseCase
 from infrastructure.pdf.pymupdf_extractor import PyMuPDFExtractor
 from infrastructure.masking.regex_masker import RegexDataMasker
 from infrastructure.analysis.thai_analyzer import ThaiSalaryAnalyzer
 from infrastructure.storage.s3_storage import S3Storage, LocalStorage
+from infrastructure.database.postgres_adapter import PostgresDatabase
 from config import settings
+
+
+# Global database instance for connection pooling
+_database_instance: PostgresDatabase | None = None
+
+
+async def get_database() -> IDatabase:
+    """Get database implementation with connection pooling"""
+    global _database_instance
+    
+    if _database_instance is None:
+        _database_instance = PostgresDatabase(
+            connection_string=settings.DATABASE_URL,
+            min_pool_size=settings.DATABASE_MIN_SIZE,
+            max_pool_size=settings.DATABASE_MAX_SIZE
+        )
+        await _database_instance.connect()
+    
+    return _database_instance
+
+
+async def close_database():
+    """Close database connection pool"""
+    global _database_instance
+    
+    if _database_instance is not None:
+        await _database_instance.close()
+        _database_instance = None
 
 
 @lru_cache()
@@ -60,7 +90,8 @@ def get_analyze_use_case(
     pdf_extractor: IPDFExtractor = None,
     data_masker: IDataMasker = None,
     salary_analyzer: ISalaryAnalyzer = None,
-    storage: IStorage = None
+    storage: IStorage = None,
+    database: IDatabase = None
 ) -> AnalyzeStatementUseCase:
     """Get analyze statement use case with injected dependencies"""
     
@@ -68,5 +99,6 @@ def get_analyze_use_case(
         pdf_extractor=pdf_extractor or get_pdf_extractor(),
         data_masker=data_masker or get_data_masker(),
         salary_analyzer=salary_analyzer or get_salary_analyzer(),
-        storage=storage or get_storage()
+        storage=storage or get_storage(),
+        database=database  # Will be injected from route handler
     )

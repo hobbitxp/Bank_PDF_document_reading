@@ -1,0 +1,46 @@
+[tool.pytest.ini_options]
+# Pytest configuration for Bank Statement Analyzer
+
+# Test discovery
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+# Output options
+addopts = [
+    "-v",                    # Verbose output
+    "--tb=short",            # Short traceback format
+    "--strict-markers",      # Error on unknown markers
+    "-ra",                   # Show summary for all test outcomes
+]
+
+# Custom markers
+markers = [
+    "integration: Integration tests requiring external services (database, S3)",
+    "unit: Unit tests with mocked dependencies (default)",
+    "slow: Tests that take significant time to run",
+    "api: API endpoint tests",
+]
+
+# Asyncio configuration
+asyncio_mode = "auto"
+
+# Coverage options (when using pytest-cov)
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/__init__.py",
+    "*/migrations/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]

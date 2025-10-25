@@ -59,13 +59,13 @@ class AnalyzeResponse(BaseModel):
     """Response schema for analyze endpoint"""
     
     success: bool
-    statement_id: str
+    analysis_id: str
     user_id: str
     timestamp: str
     statistics: StatisticsSchema
     analysis: AnalysisSchema
-    storage_urls: Dict[str, str]
-    local_files: Dict[str, str]
+    pdf_storage_url: Optional[str] = None
+    database_saved: bool = False
 
 
 class HealthResponse(BaseModel):
@@ -76,6 +76,7 @@ class HealthResponse(BaseModel):
     version: str
     architecture: str
     storage_type: str
+    database_status: Optional[str] = None
 
 
 class ErrorResponse(BaseModel):

@@ -9,8 +9,9 @@ from typing import Optional
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 
 from api.v1.schemas import AnalyzeResponse, ErrorResponse
-from api.v1.dependencies import get_analyze_use_case
+from api.v1.dependencies import get_analyze_use_case, get_database
 from application.use_cases.analyze_statement import AnalyzeStatementUseCase
+from application.ports.database import IDatabase
 
 
 router = APIRouter()
@@ -25,7 +26,8 @@ async def analyze_upload(
     employer: Optional[str] = Form(None, description="Employer name"),
     pvd_rate: float = Form(0.0, description="Provident fund rate"),
     extra_deductions: float = Form(0.0, description="Extra deductions"),
-    upload_to_storage: bool = Form(True, description="Upload to S3")
+    upload_to_storage: bool = Form(True, description="Upload to S3"),
+    database: IDatabase = Depends(get_database)
 ):
     """
     Analyze bank statement from uploaded PDF
@@ -34,7 +36,8 @@ async def analyze_upload(
     1. Extract transactions from PDF (PyMuPDF)
     2. Mask sensitive data (PDPA compliance)
     3. Analyze salary (Thai tax model)
-    4. Upload results to S3/storage
+    4. Upload PDF to S3/storage
+    5. Save results to PostgreSQL database
     """
     
     # Validate PDF file
@@ -48,11 +51,11 @@ async def analyze_upload(
         tmp_path = tmp_file.name
     
     try:
-        # Get use case
-        use_case = get_analyze_use_case()
+        # Get use case with database injected
+        use_case = get_analyze_use_case(database=database)
         
         # Execute use case
-        result = use_case.execute(
+        result = await use_case.execute(
             pdf_path=tmp_path,
             user_id=user_id,
             password=pdf_password,

@@ -50,7 +50,95 @@
 
 ## Quick Start
 
-### 1. Installation
+### Option 1: Docker (Recommended)
+
+**Prerequisites:**
+- Docker 20.10+ ([Install Docker](https://docs.docker.com/get-docker/))
+- Docker Compose 2.0+ (included with Docker Desktop)
+
+**Start services:**
+
+```bash
+# Clone repository
+git clone https://github.com/hobbitxp/Bank_PDF_document_reading.git
+cd Bank_PDF_document_reading
+
+# Start production services (API + PostgreSQL)
+docker compose up -d
+
+# Check service status
+docker compose ps
+
+# View API logs
+docker compose logs -f api
+
+# Stop services
+docker compose down
+```
+
+**Services available at:**
+- API Server: `http://localhost:8001`
+- API Documentation: `http://localhost:8001/docs`
+- PostgreSQL Database: `localhost:5432`
+
+**Test API:**
+
+```bash
+# Health check
+curl http://localhost:8001/api/v1/health
+
+# Expected response:
+# {
+#   "status": "healthy",
+#   "service": "bank-statement-analyzer",
+#   "version": "3.0.0-hexagonal",
+#   "architecture": "hexagonal",
+#   "storage_type": "local"
+# }
+
+# Analyze statement
+curl -X POST "http://localhost:8001/api/v1/analyze-upload" \
+  -F "pdf_file=@statement.pdf" \
+  -F "user_id=user001" \
+  -F "pdf_password=1234" \
+  -F "expected_gross=50000" \
+  -F "employer=ACME Corp" \
+  -F "pvd_rate=0.03"
+```
+
+**Development mode (with LocalStack for S3):**
+
+```bash
+# Start with LocalStack for local S3 testing
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+
+# LocalStack S3 available at: http://localhost:4566
+```
+
+**Useful commands:**
+
+```bash
+# Rebuild after code changes
+docker compose build api
+docker compose up -d
+
+# View all logs
+docker compose logs -f
+
+# Access database directly
+docker exec -it bank_pdf_db psql -U postgres -d bank_statements
+
+# Stop and remove all data
+docker compose down -v
+```
+
+### Option 2: Local Development
+
+**Prerequisites:**
+- Python 3.10+
+- PostgreSQL 15+ (running locally)
+
+**Installation:**
 
 ```bash
 # Clone repository
@@ -64,27 +152,39 @@ source venv/bin/activate  # Linux/Mac
 
 # Install dependencies
 pip install -r requirements.txt
+
+# Setup database
+psql -U postgres -c "CREATE DATABASE bank_statements;"
+psql -U postgres -d bank_statements -f database/schema.sql
 ```
 
-### 2. Configuration (Optional)
+**Configuration:**
 
 ```bash
-# For S3 storage (optional - will use local storage if not configured)
+# Copy environment template
 cp .env.example .env
 nano .env
 ```
 
 **Environment Variables:**
+
 ```bash
+# Database (required for local development)
+DATABASE_URL=postgresql://postgres:password@localhost:5432/bank_statements
+
+# AWS S3 (optional - will use local storage if not configured)
 AWS_ACCESS_KEY_ID=your_key
 AWS_SECRET_ACCESS_KEY=your_secret
 AWS_REGION=ap-southeast-1
 S3_BUCKET_NAME=bank-statements
-S3_PRESIGNED_URL_EXPIRATION=3600
-LOCAL_STORAGE_PATH=data/storage
+
+# Application
+ENV=development
+LOG_LEVEL=debug
+API_PORT=8001
 ```
 
-### 3. Start API Server
+**Start API Server:**
 
 ```bash
 # Start Hexagonal API (Port 8001)
@@ -95,7 +195,7 @@ python main.py
 uvicorn main:app --host 0.0.0.0 --port 8001 --reload
 ```
 
-### 4. Test API
+**Test API:**
 
 ```bash
 # Health check
@@ -111,7 +211,7 @@ curl -X POST "http://localhost:8001/api/v1/analyze-upload" \
   -F "pvd_rate=0.03"
 ```
 
-### 5. API Documentation
+**API Documentation:**
 
 Open browser: `http://localhost:8001/docs`
 
@@ -579,19 +679,66 @@ async def detect_bonus(detector: IBonusDetector = Depends(get_bonus_detector)):
 
 ### Testing
 
+This project follows Test-Driven Development (TDD) with the Red-Green-Refactor cycle.
+
+**Test Types:**
+
+1. **Unit Tests** (fast, mocked dependencies, no I/O)
+2. **Integration Tests** (real dependencies, requires Docker)
+
+**Run Tests:**
+
 ```bash
-# Unit tests (fast, no I/O)
-pytest tests/unit/
+# All unit tests (fast, no Docker needed)
+pytest tests/ -v -m "not integration"
 
-# Integration tests (with real adapters)
-pytest tests/integration/
+# All integration tests (requires Docker services running)
+docker compose up -d
+pytest tests/ -v -m integration
 
-# E2E tests (full API)
-pytest tests/e2e/
+# Specific test file
+pytest tests/test_domain_salary_analyzer.py -v
 
-# With coverage
-pytest --cov=src tests/
+# With coverage report
+pytest tests/ --cov=src --cov-report=term-missing --cov-report=html
+
+# View coverage report
+open htmlcov/index.html
 ```
+
+**TDD Workflow:**
+
+```bash
+# 1. RED: Write failing test first
+pytest tests/test_new_feature.py -v  # Should fail
+
+# 2. GREEN: Write minimal code to pass
+# ... implement feature ...
+pytest tests/test_new_feature.py -v  # Should pass
+
+# 3. REFACTOR: Improve code quality
+# ... refactor implementation ...
+pytest tests/test_new_feature.py -v  # Should still pass
+```
+
+**Coverage Requirements:**
+- Domain Layer: 100%
+- Application Layer: 90%
+- Infrastructure Layer: 70%
+
+**Pre-commit Checklist:**
+```bash
+# Run all tests
+pytest tests/ -v
+
+# Check coverage
+pytest tests/ --cov=src --cov-report=term-missing
+
+# Verify Docker health (if using Docker)
+curl http://localhost:8001/api/v1/health
+```
+
+For detailed TDD guide, see: `.github/TDD-GUIDE.md`
 
 ## CLI Usage (Legacy Scripts)
 
