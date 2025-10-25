@@ -9,3 +9,11 @@ anthropic>=0.71.0
 # Data Analysis (for salary detection)
 pandas>=2.0.0
 openpyxl>=3.1.0
+
+# FastAPI Web Framework
+fastapi>=0.115.0
+uvicorn>=0.32.0
+python-multipart>=0.0.12
+
+# AWS S3 Integration
+boto3>=1.34.0

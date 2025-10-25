@@ -1,0 +1,16 @@
+{
+  "metadata": {
+    "filename": "tmpgbv0xlms",
+    "timestamp": "20251025_180653"
+  },
+  "analysis": {
+    "detected_amount": 50000.0,
+    "confidence": "low",
+    "transactions_analyzed": 0,
+    "clusters_found": 0,
+    "matches_expected": true,
+    "difference": 0.0,
+    "difference_percentage": 0.0
+  },
+  "top_candidates": []
+}

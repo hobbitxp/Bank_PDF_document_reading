@@ -1,0 +1,117 @@
+{
+  "metadata": {
+    "filename": "tmp2p20vv3a",
+    "timestamp": "20251025_181142"
+  },
+  "analysis": {
+    "detected_amount": 40199.68,
+    "confidence": "low",
+    "transactions_analyzed": 72,
+    "clusters_found": 3,
+    "matches_expected": false,
+    "difference": -9800.32,
+    "difference_percentage": -19.6
+  },
+  "top_candidates": [
+    {
+      "page": 1,
+      "amount": 6661.31,
+      "description": "6,661.31 My QR K PLUS รับโอนเงินผ่าน QR",
+      "time": null,
+      "channel": "K PLUS",
+      "payer": "PLUS",
+      "score": 7,
+      "cluster_id": null
+    },
+    {
+      "page": 1,
+      "amount": 6689.31,
+      "description": "6,689.31 My QR K PLUS รับโอนเงินผ่าน QR",
+      "time": null,
+      "channel": "K PLUS",
+      "payer": "PLUS",
+      "score": 7,
+      "cluster_id": null
+    },
+    {
+      "page": 1,
+      "amount": 4385.31,
+      "description": "4,385.31 My QR K PLUS รับโอนเงินผ่าน QR",
+      "time": null,
+      "channel": "K PLUS",
+      "payer": "PLUS",
+      "score": 7,
+      "cluster_id": null
+    },
+    {
+      "page": 1,
+      "amount": 2841.31,
+      "description": "2,841.31 My QR K PLUS รับโอนเงินผ่าน QR",
+      "time": null,
+      "channel": "K PLUS",
+      "payer": "PLUS",
+      "score": 7,
+      "cluster_id": null
+    },
+    {
+      "page": 1,
+      "amount": 2900.31,
+      "description": "2,900.31 My QR K PLUS รับโอนเงินผ่าน QR",
+      "time": null,
+      "channel": "K PLUS",
+      "payer": "PLUS",
+      "score": 7,
+      "cluster_id": null
+    },
+    {
+      "page": 2,
+      "amount": 2384.31,
+      "description": "2,384.31 My QR K PLUS รับโอนเงินผ่าน QR",
+      "time": null,
+      "channel": "K PLUS",
+      "payer": "PLUS",
+      "score": 7,
+      "cluster_id": null
+    },
+    {
+      "page": 2,
+      "amount": 2443.31,
+      "description": "2,443.31 My QR K PLUS รับโอนเงินผ่าน QR",
+      "time": null,
+      "channel": "K PLUS",
+      "payer": "PLUS",
+      "score": 7,
+      "cluster_id": null
+    },
+    {
+      "page": 2,
+      "amount": 2474.31,
+      "description": "2,474.31 My QR K PLUS รับโอนเงินผ่าน QR",
+      "time": null,
+      "channel": "K PLUS",
+      "payer": "PLUS",
+      "score": 7,
+      "cluster_id": null
+    },
+    {
+      "page": 2,
+      "amount": 2595.31,
+      "description": "2,595.31 My QR K PLUS รับโอนเงินผ่าน QR",
+      "time": null,
+      "channel": "K PLUS",
+      "payer": "PLUS",
+      "score": 7,
+      "cluster_id": null
+    },
+    {
+      "page": 2,
+      "amount": 238.95,
+      "description": "238.95 My QR K PLUS รับโอนเงินผ่าน QR",
+      "time": null,
+      "channel": "K PLUS",
+      "payer": "PLUS",
+      "score": 7,
+      "cluster_id": null
+    }
+  ]
+}
