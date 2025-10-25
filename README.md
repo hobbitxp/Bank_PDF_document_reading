@@ -155,8 +155,16 @@ pip install -r requirements.txt
 
 # Setup database
 psql -U postgres -c "CREATE DATABASE bank_statements;"
-psql -U postgres -d bank_statements -f database/schema.sql
+
+# Run migrations (recommended)
+export DATABASE_URL="postgresql://postgres:password@localhost:5432/bank_statements"
+alembic upgrade head
+
+# OR apply schema directly (alternative)
+# psql -U postgres -d bank_statements -f database/schema.sql
 ```
+
+**Note:** For database migrations, see `database/MIGRATIONS.md`
 
 **Configuration:**
 
