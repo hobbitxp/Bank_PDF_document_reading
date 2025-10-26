@@ -1,8 +1,6 @@
 # Docker Compose for Bank Statement Analyzer
 # Production-ready configuration
 
-version: '3.8'
-
 services:
   # FastAPI Application
   api:
@@ -32,6 +30,8 @@ services:
     volumes:
       # Mount source code for development (hot reload)
       - ./src:/app/src:ro
+      # Mount tmp directory for temporary file storage
+      - ./tmp:/app/tmp
     networks:
       - bank_network
     restart: unless-stopped

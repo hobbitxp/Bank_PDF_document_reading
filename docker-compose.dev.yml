@@ -1,8 +1,6 @@
 # Docker Compose Override for Development
 # Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 
-version: '3.8'
-
 services:
   # API service overrides for development
   api:
@@ -52,25 +50,26 @@ services:
 
   # LocalStack for S3 local testing (enabled in dev)
   localstack:
-    image: localstack/localstack:latest
+    image: localstack/localstack:3.8
     container_name: bank_localstack_dev
     ports:
       - "4566:4566"
-      - "4571:4571"  # S3 legacy port
     environment:
       - SERVICES=s3
       - DEFAULT_REGION=ap-southeast-1
-      - DATA_DIR=/tmp/localstack/data
       - DEBUG=1
-      - PERSISTENCE=1
+      - PERSISTENCE=0
+      - SKIP_INFRA_DOWNLOADS=1
     volumes:
-      - localstack_dev_data:/tmp/localstack
       - ./scripts/init-localstack.sh:/etc/localstack/init/ready.d/init-s3.sh:ro
     networks:
       - bank_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
 volumes:
   postgres_dev_data:
-    driver: local
-  localstack_dev_data:
     driver: local

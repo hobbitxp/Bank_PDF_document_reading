@@ -24,7 +24,8 @@ class S3Storage(IStorage):
         aws_access_key: Optional[str] = None,
         aws_secret_key: Optional[str] = None,
         region: str = "ap-southeast-1",
-        url_expiration: int = 3600
+        url_expiration: int = 3600,
+        endpoint_url: Optional[str] = None
     ):
         """Initialize S3 client"""
         
@@ -38,6 +39,10 @@ class S3Storage(IStorage):
         if aws_access_key and aws_secret_key:
             session_kwargs["aws_access_key_id"] = aws_access_key
             session_kwargs["aws_secret_access_key"] = aws_secret_key
+        
+        # Add endpoint URL for LocalStack support
+        if endpoint_url:
+            session_kwargs["endpoint_url"] = endpoint_url
         
         self.s3_client = boto3.client('s3', **session_kwargs)
     

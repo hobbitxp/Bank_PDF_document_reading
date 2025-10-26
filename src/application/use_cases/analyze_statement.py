@@ -72,14 +72,13 @@ class AnalyzeStatementUseCase:
         
         # 4. Upload PDF to storage (if enabled)
         pdf_storage_url = None
+        temp_storage_path = None
         if upload_to_storage:
             try:
                 base_filename = Path(pdf_path).stem
                 object_key = f"{user_id}/{timestamp}_{base_filename}.pdf"
                 
-                with open(pdf_path, 'rb') as f:
-                    pdf_content = f.read()
-                
+                # Upload to S3
                 pdf_storage_url = self.storage.upload(
                     pdf_path,
                     object_key,
@@ -89,9 +88,32 @@ class AnalyzeStatementUseCase:
                         "analysis_id": analysis_id
                     }
                 )
+                
+                # Verify upload by downloading back
+                # Save to local tmp directory (inside container)
+                tmp_dir = Path("/app/tmp")
+                tmp_dir.mkdir(parents=True, exist_ok=True)
+                
+                temp_storage_path = tmp_dir / f"{timestamp}_{base_filename}.pdf"
+                
+                # Download from S3 to verify
+                self.storage.download(object_key, str(temp_storage_path))
+                
+                # Verify file size
+                original_size = Path(pdf_path).stat().st_size
+                downloaded_size = temp_storage_path.stat().st_size
+                
+                if original_size != downloaded_size:
+                    raise Exception(f"File size mismatch: original={original_size}, downloaded={downloaded_size}")
+                
+                print(f"✅ PDF verified and saved to: {temp_storage_path}")
+                
             except Exception as e:
                 # Continue even if upload fails
                 pdf_storage_url = f"Upload failed: {e}"
+                if temp_storage_path and temp_storage_path.exists():
+                    temp_storage_path.unlink()  # Clean up on error
+                temp_storage_path = None
         
         # 5. Save to database (if available)
         if self.database:
@@ -182,7 +204,15 @@ class AnalyzeStatementUseCase:
         else:
             print(f"⚠️  DEBUG: Database not available (self.database is None), skipping save")
         
-        # 6. Build response
+        # 6. Clean up temporary storage file
+        if temp_storage_path and temp_storage_path.exists():
+            try:
+                temp_storage_path.unlink()
+                print(f"✅ Cleaned up temporary file: {temp_storage_path}")
+            except Exception as e:
+                print(f"⚠️  Failed to clean up temporary file: {e}")
+        
+        # 7. Build response
         return {
             "success": True,
             "analysis_id": analysis_id,

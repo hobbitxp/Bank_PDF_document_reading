@@ -49,6 +49,7 @@ ENV PATH=/home/appuser/.local/bin:$PATH
 # Copy application code
 COPY --chown=appuser:appuser src/ ./src/
 COPY --chown=appuser:appuser database/ ./database/
+COPY --chown=appuser:appuser tests/ ./tests/
 
 # Switch to non-root user
 USER appuser
