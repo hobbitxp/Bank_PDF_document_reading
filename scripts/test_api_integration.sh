@@ -31,12 +31,12 @@ print_test() {
 
 print_success() {
     echo -e "${GREEN}✓ PASS:${NC} $1"
-    ((TESTS_PASSED++))
+    ((TESTS_PASSED+=1))
 }
 
 print_fail() {
     echo -e "${RED}✗ FAIL:${NC} $1"
-    ((TESTS_FAILED++))
+    ((TESTS_FAILED+=1))
 }
 
 print_info() {
@@ -121,7 +121,13 @@ EOF
 # Query database
 query_db() {
     local query="$1"
-    docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -t -c "$query" 2>/dev/null
+    local allow_errors="${2:-false}"
+
+    if [ "$allow_errors" = "true" ]; then
+        docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -t -c "$query"
+    else
+        docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -t -c "$query" 2>/dev/null
+    fi
 }
 
 # Clean test data from database
@@ -134,7 +140,7 @@ cleanup_test_data() {
 
 # Test 1: Health Endpoint
 test_health_endpoint() {
-    ((TESTS_RUN++))
+    ((TESTS_RUN+=1))
     print_test "Health Endpoint"
     
     response=$(curl -s "$API_URL/api/v1/health")
@@ -156,7 +162,7 @@ test_health_endpoint() {
 
 # Test 2: Analyze Upload - Basic
 test_analyze_upload_basic() {
-    ((TESTS_RUN++))
+    ((TESTS_RUN+=1))
     print_test "Analyze Upload - Basic Request"
     
     local test_user="test_integration_basic"
@@ -222,7 +228,7 @@ test_analyze_upload_basic() {
 
 # Test 3: Analyze Upload - With Parameters
 test_analyze_upload_with_params() {
-    ((TESTS_RUN++))
+    ((TESTS_RUN+=1))
     print_test "Analyze Upload - With Parameters"
     
     local test_user="test_integration_params"
@@ -271,7 +277,7 @@ test_analyze_upload_with_params() {
 
 # Test 4: Database Constraints
 test_database_constraints() {
-    ((TESTS_RUN++))
+    ((TESTS_RUN+=1))
     print_test "Database Constraints Validation"
     
     local test_user="test_constraints"
@@ -290,7 +296,7 @@ test_database_constraints() {
     fi
     
     # Try invalid confidence (should fail)
-    if query_db "INSERT INTO analyses (user_id, confidence, transactions_analyzed) VALUES ('$test_user', 'invalid', 100);" 2>&1 | grep -q "violates check constraint"; then
+    if query_db "INSERT INTO analyses (user_id, confidence, transactions_analyzed) VALUES ('$test_user', 'invalid', 100);" "true" 2>&1 | grep -q "violates check constraint"; then
         print_success "Database rejects invalid confidence values"
     else
         print_fail "Database did not enforce confidence constraint"
@@ -309,7 +315,7 @@ test_database_constraints() {
 
 # Test 5: Concurrent Requests
 test_concurrent_requests() {
-    ((TESTS_RUN++))
+    ((TESTS_RUN+=1))
     print_test "Concurrent Requests Handling"
     
     local test_pdf="/tmp/test_concurrent.pdf"
@@ -356,7 +362,7 @@ test_concurrent_requests() {
 
 # Test 6: Audit Log Details
 test_audit_log_details() {
-    ((TESTS_RUN++))
+    ((TESTS_RUN+=1))
     print_test "Audit Log Details"
     
     local test_user="test_audit_details"
@@ -402,7 +408,7 @@ test_audit_log_details() {
 
 # Test 7: API Error Handling
 test_api_error_handling() {
-    ((TESTS_RUN++))
+    ((TESTS_RUN+=1))
     print_test "API Error Handling"
     
     # Test missing required field

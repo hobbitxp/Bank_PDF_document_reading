@@ -17,6 +17,7 @@ class Transaction:
     amount: float
     description: str
     is_credit: bool
+    date: Optional[str] = None  # Transaction date (DD/MM/YYYY)
     time: Optional[str] = None
     channel: Optional[str] = None
     payer: Optional[str] = None

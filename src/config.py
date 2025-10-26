@@ -13,7 +13,7 @@ class Settings:
     AWS_ACCESS_KEY_ID: str = os.getenv("AWS_ACCESS_KEY_ID", "")
     AWS_SECRET_ACCESS_KEY: str = os.getenv("AWS_SECRET_ACCESS_KEY", "")
     AWS_REGION: str = os.getenv("AWS_REGION", "ap-southeast-1")
-    S3_BUCKET_NAME: str = os.getenv("S3_BUCKET_NAME", "bank-statements-1761407671")
+    S3_BUCKET_NAME: str = os.getenv("S3_BUCKET", "analyze-bank-statement-dev")
     S3_PRESIGNED_URL_EXPIRATION: int = int(os.getenv("S3_PRESIGNED_URL_EXPIRATION", "3600"))
     
     # PostgreSQL Database Configuration

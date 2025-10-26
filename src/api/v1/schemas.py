@@ -49,6 +49,9 @@ class AnalysisSchema(BaseModel):
     confidence: str
     transactions_analyzed: int
     clusters_found: int
+    months_detected: int
+    approved: bool
+    rejection_reason: Optional[str]
     top_candidates_count: int
     matches_expected: Optional[bool]
     difference: Optional[float]

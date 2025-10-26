@@ -55,6 +55,9 @@ class PostgresDatabase(IDatabase):
         credit_transactions: int,
         debit_transactions: int,
         clusters_found: int,
+        months_detected: int,
+        approved: bool,
+        rejection_reason: Optional[str],
         top_candidates_count: int,
         expected_gross: Optional[float],
         matches_expected: Optional[bool],
@@ -78,13 +81,15 @@ class PostgresDatabase(IDatabase):
             INSERT INTO analyses (
                 user_id, detected_salary, confidence, transactions_analyzed,
                 credit_transactions, debit_transactions, clusters_found,
+                months_detected, approved, rejection_reason,
                 top_candidates_count, expected_gross, matches_expected,
                 difference, difference_percentage, employer, pvd_rate,
                 extra_deductions, pdf_filename, pages_processed,
                 masked_items, metadata, created_at
             ) VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-                $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW()
+                $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
+                $21, $22, NOW()
             )
             RETURNING id
         """
@@ -99,6 +104,9 @@ class PostgresDatabase(IDatabase):
                 credit_transactions,
                 debit_transactions,
                 clusters_found,
+                months_detected,
+                approved,
+                rejection_reason,
                 top_candidates_count,
                 expected_gross,
                 matches_expected,
