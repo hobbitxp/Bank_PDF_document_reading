@@ -37,7 +37,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
+# Set working directory and give ownership to appuser
+RUN mkdir -p /app && chown -R appuser:appuser /app
 WORKDIR /app
 
 # Copy Python dependencies from builder
