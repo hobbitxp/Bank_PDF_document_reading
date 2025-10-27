@@ -428,8 +428,27 @@ class ThaiSalaryAnalyzer(ISalaryAnalyzer):
             if len(txs) < self.MIN_MONTHS_REQUIRED:
                 continue
             
+            # Count unique months from transactions
+            unique_months = set()
+            for tx in txs:
+                if tx.date:
+                    match = re.search(r'(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?', tx.date)
+                    if match:
+                        day, month, year = match.groups()
+                        if year:
+                            if len(year) == 2:
+                                year_int = int(year)
+                                if year_int >= 50:
+                                    year = f"25{year}"
+                                else:
+                                    year = f"26{year}"
+                            month_key = f"{year}-{month.zfill(2)}"
+                            unique_months.add(month_key)
+            
+            months_detected = len(unique_months)
+            
             score = self._score_salary_group(txs, employer)
-            print(f"[SCORE] source='{source}' txs={len(txs)} score={score:.2f}")
+            print(f"[SCORE] source='{source}' txs={len(txs)} months={months_detected} score={score:.2f}")
             
             if score > best_score:
                 best_score = score
@@ -437,7 +456,7 @@ class ThaiSalaryAnalyzer(ISalaryAnalyzer):
                     "source": source,
                     "transactions": txs,
                     "score": score,
-                    "months_detected": len(txs)  # Number of transactions = months
+                    "months_detected": months_detected  # Count unique months, not transactions
                 }
         
         if not best_group:
