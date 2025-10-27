@@ -25,13 +25,15 @@ class S3Storage(IStorage):
         aws_secret_key: Optional[str] = None,
         region: str = "ap-southeast-1",
         url_expiration: int = 3600,
-        endpoint_url: Optional[str] = None
+        endpoint_url: Optional[str] = None,
+        environment: str = "dev"
     ):
         """Initialize S3 client"""
         
         self.bucket_name = bucket_name
         self.region = region
         self.url_expiration = url_expiration
+        self.environment = environment  # dev, staging, prod
         
         # Initialize S3 client
         session_kwargs = {"region_name": region}
@@ -55,6 +57,9 @@ class S3Storage(IStorage):
         """Upload file to S3 and return pre-signed URL"""
         
         try:
+            # Add environment prefix to object key
+            object_key_with_env = f"{self.environment}/{object_key}"
+            
             # Prepare extra args
             extra_args = {}
             
@@ -70,7 +75,7 @@ class S3Storage(IStorage):
             self.s3_client.upload_file(
                 file_path,
                 self.bucket_name,
-                object_key,
+                object_key_with_env,
                 ExtraArgs=extra_args if extra_args else None
             )
             
@@ -79,7 +84,7 @@ class S3Storage(IStorage):
                 'get_object',
                 Params={
                     'Bucket': self.bucket_name,
-                    'Key': object_key
+                    'Key': object_key_with_env
                 },
                 ExpiresIn=self.url_expiration
             )
@@ -97,13 +102,16 @@ class S3Storage(IStorage):
         """Download file from S3"""
         
         try:
+            # Add environment prefix
+            object_key_with_env = f"{self.environment}/{object_key}"
+            
             # Create directory if needed
             os.makedirs(os.path.dirname(destination_path), exist_ok=True)
             
             # Download file
             self.s3_client.download_file(
                 self.bucket_name,
-                object_key,
+                object_key_with_env,
                 destination_path
             )
             
@@ -120,11 +128,14 @@ class S3Storage(IStorage):
         """Generate pre-signed URL for existing S3 object"""
         
         try:
+            # Add environment prefix
+            object_key_with_env = f"{self.environment}/{object_key}"
+            
             url = self.s3_client.generate_presigned_url(
                 'get_object',
                 Params={
                     'Bucket': self.bucket_name,
-                    'Key': object_key
+                    'Key': object_key_with_env
                 },
                 ExpiresIn=expiration or self.url_expiration
             )
@@ -138,9 +149,12 @@ class S3Storage(IStorage):
         """Delete object from S3"""
         
         try:
+            # Add environment prefix
+            object_key_with_env = f"{self.environment}/{object_key}"
+            
             self.s3_client.delete_object(
                 Bucket=self.bucket_name,
-                Key=object_key
+                Key=object_key_with_env
             )
             
             return True
@@ -152,9 +166,12 @@ class S3Storage(IStorage):
         """Check if object exists in S3"""
         
         try:
+            # Add environment prefix
+            object_key_with_env = f"{self.environment}/{object_key}"
+            
             self.s3_client.head_object(
                 Bucket=self.bucket_name,
-                Key=object_key
+                Key=object_key_with_env
             )
             return True
         

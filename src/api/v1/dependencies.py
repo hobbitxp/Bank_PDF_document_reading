@@ -109,7 +109,8 @@ def get_storage() -> IStorage:
                 aws_secret_key=settings.AWS_SECRET_ACCESS_KEY,
                 region=settings.AWS_REGION,
                 url_expiration=settings.S3_PRESIGNED_URL_EXPIRATION,
-                endpoint_url=getattr(settings, 'S3_ENDPOINT_URL', None)
+                endpoint_url=getattr(settings, 'S3_ENDPOINT_URL', None),
+                environment=getattr(settings, 'ENVIRONMENT', 'dev')  # dev, staging, prod
             )
         except Exception as e:
             print(f"⚠️  S3 initialization failed, using local storage: {e}")

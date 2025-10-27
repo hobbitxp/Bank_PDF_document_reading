@@ -61,3 +61,4 @@ src/data/storage/**/*_masked.json
 src/data/storage/**/*_analysis.json
 src/data/storage/**/*.meta.json
 
+venv_debug/
