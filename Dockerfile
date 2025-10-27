@@ -52,6 +52,9 @@ COPY --chown=appuser:appuser src/ ./src/
 COPY --chown=appuser:appuser database/ ./database/
 COPY --chown=appuser:appuser tests/ ./tests/
 
+# Create tmp directory and change ownership of /app to appuser
+RUN mkdir -p /app/tmp && chown -R appuser:appuser /app
+
 # Switch to non-root user
 USER appuser
 
