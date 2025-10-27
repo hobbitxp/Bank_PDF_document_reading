@@ -23,15 +23,22 @@ NC='\033[0m' # No Color
 # Step 1: Create SSH key pair if not exists
 echo -e "${YELLOW}Step 1: Checking SSH key pair...${NC}"
 if ! aws lightsail get-key-pair --key-pair-name "$KEY_PAIR_NAME" &>/dev/null; then
-    echo "Creating new key pair: $KEY_PAIR_NAME"
-    aws lightsail create-key-pair \
+    echo "Key pair not found in AWS. Checking local key..."
+    if [ ! -f ~/.ssh/bank-app-key ]; then
+        echo "Creating new SSH key pair locally..."
+        ssh-keygen -t rsa -b 4096 -f ~/.ssh/bank-app-key -N "" -C "bank-app-lightsail"
+        chmod 400 ~/.ssh/bank-app-key
+    fi
+    echo "Importing public key to AWS Lightsail..."
+    aws lightsail import-key-pair \
         --key-pair-name "$KEY_PAIR_NAME" \
-        --query 'privateKeyBase64' \
-        --output text | base64 --decode > ~/.ssh/${KEY_PAIR_NAME}.pem
-    chmod 400 ~/.ssh/${KEY_PAIR_NAME}.pem
-    echo -e "${GREEN}✅ Key pair created: ~/.ssh/${KEY_PAIR_NAME}.pem${NC}"
+        --public-key-base64 file://~/.ssh/bank-app-key.pub
+    echo -e "${GREEN}✅ Key pair imported: ~/.ssh/bank-app-key${NC}"
 else
-    echo -e "${GREEN}✅ Key pair already exists${NC}"
+    echo -e "${GREEN}✅ Key pair already exists in AWS${NC}"
+    if [ ! -f ~/.ssh/bank-app-key ]; then
+        echo -e "${RED}⚠️  Local key file missing! You may need to use Lightsail console for SSH${NC}"
+    fi
 fi
 
 # Step 2: Check if instance already exists
@@ -99,7 +106,7 @@ echo -e "${GREEN}✅ Static IP allocated: $STATIC_IP${NC}"
 echo -e "${YELLOW}Step 8: Waiting for SSH to be ready...${NC}"
 sleep 30
 for i in {1..20}; do
-    if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i ~/.ssh/${KEY_PAIR_NAME}.pem ubuntu@$STATIC_IP "echo 'SSH Ready'" &>/dev/null; then
+    if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i ~/.ssh/bank-app-key ubuntu@$STATIC_IP "echo 'SSH Ready'" &>/dev/null; then
         echo -e "${GREEN}✅ SSH is ready!${NC}"
         break
     fi
@@ -116,11 +123,11 @@ echo "Instance Details:"
 echo "  Name: $INSTANCE_NAME"
 echo "  Plan: $BUNDLE_ID (\$5/month)"
 echo "  Static IP: $STATIC_IP"
-echo "  SSH Key: ~/.ssh/${KEY_PAIR_NAME}.pem"
+echo "  SSH Key: ~/.ssh/bank-app-key"
 echo ""
 echo "Next Steps:"
 echo "  1. SSH into instance:"
-echo "     ssh -i ~/.ssh/${KEY_PAIR_NAME}.pem ubuntu@$STATIC_IP"
+echo "     ssh -i ~/.ssh/bank-app-key ubuntu@$STATIC_IP"
 echo ""
 echo "  2. Run deployment script:"
 echo "     ./scripts/deploy-to-lightsail.sh $STATIC_IP"

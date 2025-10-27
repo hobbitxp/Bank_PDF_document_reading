@@ -10,7 +10,7 @@ if [ -z "$1" ]; then
 fi
 
 INSTANCE_IP=$1
-SSH_KEY=~/.ssh/bank-app-key.pem
+SSH_KEY=~/.ssh/bank-app-key
 SSH_USER=ubuntu
 
 GREEN='\033[0;32m'
