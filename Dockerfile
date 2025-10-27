@@ -52,14 +52,11 @@ COPY --chown=appuser:appuser src/ ./src/
 COPY --chown=appuser:appuser database/ ./database/
 COPY --chown=appuser:appuser tests/ ./tests/
 
-# Change ownership of /app to appuser and create tmp directory
-RUN chown -R appuser:appuser /app && mkdir -p /app/tmp
+# Create tmp directory before chown
+RUN mkdir -p /app/tmp && chown -R appuser:appuser /app
 
 # Switch to non-root user
 USER appuser
-
-# Create tmp directory (as appuser after USER switch)
-RUN mkdir -p /app/tmp
 
 # Expose API port
 EXPOSE 8001
