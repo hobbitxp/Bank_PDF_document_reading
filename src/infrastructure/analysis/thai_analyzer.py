@@ -448,7 +448,7 @@ class ThaiSalaryAnalyzer(ISalaryAnalyzer):
             months_detected = len(unique_months)
             
             score = self._score_salary_group(txs, employer)
-            print(f"[SCORE] source='{source}' txs={len(txs)} months={months_detected} score={score:.2f}")
+            print(f"[SCORE] source='{source}' txs={len(txs)} months={months_detected} score={score:.2f} months_list={sorted(unique_months)}")
             
             if score > best_score:
                 best_score = score
