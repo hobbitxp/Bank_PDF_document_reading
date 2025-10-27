@@ -21,6 +21,7 @@ class IDatabase(ABC):
         user_id: str,
         detected_salary: Optional[float],
         confidence: str,
+        income_type: str,
         transactions_analyzed: int,
         credit_transactions: int,
         debit_transactions: int,
@@ -48,6 +49,7 @@ class IDatabase(ABC):
             user_id: User identifier
             detected_salary: Detected salary amount
             confidence: Confidence level (high, medium, low)
+            income_type: Income type (salaried, self_employed)
             transactions_analyzed: Total transactions analyzed
             credit_transactions: Number of credit transactions
             debit_transactions: Number of debit transactions

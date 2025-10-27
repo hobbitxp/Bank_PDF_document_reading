@@ -44,3 +44,34 @@ class Statement:
             "masked_items_count": self.masked_items_count,
             "transaction_count": len(self.transactions)
         }
+    
+    def to_csv(self, output_path: str) -> None:
+        """
+        Export transactions to CSV file
+        
+        Args:
+            output_path: Path to save CSV file
+        """
+        import csv
+        
+        with open(output_path, 'w', newline='', encoding='utf-8-sig') as csvfile:
+            fieldnames = [
+                'page', 'line_index', 'date', 'time', 'channel',
+                'description', 'amount', 'is_credit', 'type', 'payer'
+            ]
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            
+            writer.writeheader()
+            for tx in self.transactions:
+                writer.writerow({
+                    'page': tx.page,
+                    'line_index': tx.line_index,
+                    'date': tx.date,
+                    'time': tx.time,
+                    'channel': tx.channel,
+                    'description': tx.description,
+                    'amount': tx.amount,
+                    'is_credit': 'CREDIT' if tx.is_credit else 'DEBIT',
+                    'type': 'เงินเข้า' if tx.is_credit else 'เงินออก',
+                    'payer': tx.payer or ''
+                })

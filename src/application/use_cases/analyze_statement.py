@@ -17,6 +17,7 @@ from application.ports.storage import IStorage
 from application.ports.database import IDatabase
 from domain.entities.statement import Statement
 from domain.entities.salary_analysis import SalaryAnalysis
+from domain.enums import IncomeType
 
 
 class AnalyzeStatementUseCase:
@@ -47,6 +48,7 @@ class AnalyzeStatementUseCase:
         employer: Optional[str] = None,
         pvd_rate: float = 0.0,
         extra_deductions: float = 0.0,
+        income_type: Optional[IncomeType] = None,
         upload_to_storage: bool = True
     ) -> Dict[str, Any]:
         """Execute statement analysis workflow"""
@@ -58,6 +60,16 @@ class AnalyzeStatementUseCase:
         # 1. Extract from PDF
         statement = self.pdf_extractor.extract(pdf_path, password)
         
+        # 1.1. Export transactions to CSV
+        import os
+        csv_filename = f"{user_id}_{timestamp.replace(':', '-').replace('.', '_')}_transactions.csv"
+        csv_path = os.path.join("/app/tmp", csv_filename)
+        try:
+            statement.to_csv(csv_path)
+            print(f"[CSV_EXPORT] Saved: {csv_path}")
+        except Exception as e:
+            print(f"[CSV_EXPORT] Error: {e}")
+        
         # 2. Mask sensitive data
         masked_statement, masking_mapping = self.data_masker.mask(statement)
         
@@ -67,7 +79,8 @@ class AnalyzeStatementUseCase:
             expected_gross=expected_gross,
             employer=employer,
             pvd_rate=pvd_rate,
-            extra_deductions=extra_deductions
+            extra_deductions=extra_deductions,
+            income_type=income_type
         )
         
         # 4. Upload PDF to storage (if enabled)
@@ -146,6 +159,7 @@ class AnalyzeStatementUseCase:
                     user_id=user_id,
                     detected_salary=analysis.detected_amount,
                     confidence=analysis.confidence,
+                    income_type=analysis.income_type.value,
                     transactions_analyzed=analysis.transactions_analyzed,
                     credit_transactions=len(masked_statement.get_credit_transactions()),
                     debit_transactions=len(masked_statement.get_debit_transactions()),
@@ -231,6 +245,7 @@ class AnalyzeStatementUseCase:
             "analysis": {
                 "detected_amount": analysis.detected_amount,
                 "confidence": analysis.confidence,
+                "income_type": analysis.income_type.value,
                 "transactions_analyzed": analysis.transactions_analyzed,
                 "clusters_found": analysis.clusters_found,
                 "months_detected": analysis.months_detected,

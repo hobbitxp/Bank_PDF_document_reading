@@ -12,6 +12,7 @@ from application.ports.salary_analyzer import ISalaryAnalyzer
 from domain.entities.statement import Statement
 from domain.entities.salary_analysis import SalaryAnalysis
 from domain.entities.transaction import Transaction
+from domain.enums import IncomeType
 
 
 class ThaiSalaryAnalyzer(ISalaryAnalyzer):
@@ -66,15 +67,36 @@ class ThaiSalaryAnalyzer(ISalaryAnalyzer):
         expected_gross: Optional[float] = None,
         employer: Optional[str] = None,
         pvd_rate: float = 0.0,
-        extra_deductions: float = 0.0
+        extra_deductions: float = 0.0,
+        income_type: Optional[IncomeType] = None
     ) -> SalaryAnalysis:
         """
-        Analyze statement using 6-month recurring pattern detection
-        New logic: Detect net salary pattern → Convert to gross
+        Analyze statement for income detection
+        
+        Args:
+            statement: Bank statement with transactions
+            expected_gross: Expected income (optional)
+            employer: Employer name for salaried (optional)
+            pvd_rate: PVD rate for salaried (optional)
+            extra_deductions: Extra deductions for salaried (optional)
+            income_type: Income type (SALARIED or SELF_EMPLOYED)
+                        If None, auto-detect (default: SALARIED)
+        
+        Returns:
+            SalaryAnalysis with income_type field
         """
         
         credits = statement.get_credit_transactions()
         
+        # Auto-detect or use provided income_type
+        if income_type is None:
+            income_type = IncomeType.SALARIED  # Default
+        
+        # Route to appropriate analyzer
+        if income_type == IncomeType.SELF_EMPLOYED:
+            return self._calculate_self_employed_income(credits, expected_gross)
+        
+        # Original salaried logic below
         # 1) Detect monthly salary net pattern
         detected = self._detect_monthly_salary_net(credits, employer)
         
@@ -91,6 +113,7 @@ class ThaiSalaryAnalyzer(ISalaryAnalyzer):
                 return SalaryAnalysis(
                     detected_amount=0.0,
                     confidence="low",
+                    income_type=IncomeType.SALARIED,
                     transactions_analyzed=len(credits),
                     clusters_found=0,
                     best_candidates=[],
@@ -150,6 +173,7 @@ class ThaiSalaryAnalyzer(ISalaryAnalyzer):
         return SalaryAnalysis(
             detected_amount=round(estimated_gross, 2),
             confidence=confidence,
+            income_type=IncomeType.SALARIED,
             transactions_analyzed=len(credits),
             clusters_found=1 if detected else 0,
             best_candidates=detected["transactions"][:10] if detected else [],
@@ -160,10 +184,125 @@ class ThaiSalaryAnalyzer(ISalaryAnalyzer):
             rejection_reason=rejection_reason
         )
     
+    def _calculate_self_employed_income(
+        self,
+        credits: List[Transaction],
+        expected_gross: Optional[float] = None
+    ) -> SalaryAnalysis:
+        """
+        Calculate average income for self-employed/freelancers
+        Strategy: Sum all credits for 6 months, divide by 6
+        """
+        # Filter out summary lines (รวมฝากเงิน, รวมถอนเงิน, etc.)
+        filtered_credits = [
+            tx for tx in credits 
+            if tx.date and "รวม" not in tx.description
+        ]
+        
+        print(f"[SELF_EMPLOYED] Analyzing {len(filtered_credits)} credit transactions (filtered from {len(credits)} total)")
+        
+        # Group by month
+        monthly_totals = defaultdict(float)
+        monthly_count = defaultdict(int)
+        
+        for tx in filtered_credits:
+            # Extract year-month from DD/MM/YYYY or DD/MM/YY or DD-MM-YY (KBANK format)
+            # Support both "/" and "-" separators
+            date_str = tx.date.replace("-", "/")  # Normalize to slash separator
+            parts = date_str.split("/")
+            
+            if len(parts) != 3:
+                print(f"[SELF_EMPLOYED] Skipping invalid date format: {tx.date}")
+                continue
+                
+            day, month, year = parts
+            
+            # Convert 2-digit Thai Buddhist year to 4-digit
+            if len(year) == 2:
+                year_int = int(year)
+                # Assume 68 = 2568 (2025 AD)
+                if year_int >= 50:  # 50-99 = 2550-2599
+                    year = f"25{year}"
+                else:  # 00-49 = 2600-2649
+                    year = f"26{year}"
+            
+            month_key = f"{year}-{month.zfill(2)}"  # YYYY-MM
+            monthly_totals[month_key] += tx.amount
+            monthly_count[month_key] += 1
+        
+        print(f"[SELF_EMPLOYED] Grouped into {len(monthly_totals)} months: {dict(monthly_totals)}")
+        
+        months_detected = len(monthly_totals)
+        
+        if months_detected == 0:
+            return SalaryAnalysis(
+                detected_amount=0.0,
+                confidence="low",
+                income_type=IncomeType.SELF_EMPLOYED,
+                transactions_analyzed=len(credits),
+                clusters_found=0,
+                best_candidates=[],
+                expected_salary=expected_gross,
+                months_detected=0,
+                approved=False,
+                rejection_reason="No dated transactions found for averaging"
+            )
+        
+        # Calculate average
+        total_income = sum(monthly_totals.values())
+        average_monthly = total_income / months_detected
+        
+        # Determine confidence
+        if months_detected >= 6:
+            confidence = "high"
+        elif months_detected >= 4:
+            confidence = "medium"
+        else:
+            confidence = "low"
+        
+        # Approval logic
+        approved = False
+        rejection_reason = None
+        
+        if months_detected < 6:
+            rejection_reason = f"Insufficient data: only {months_detected} months detected (required: 6)"
+        elif expected_gross is not None:
+            matches = abs(average_monthly - expected_gross) < 5000
+            if not matches:
+                diff_amount = average_monthly - expected_gross
+                diff_pct = (diff_amount / expected_gross) * 100
+                rejection_reason = f"Income mismatch: detected {average_monthly:.2f} vs expected {expected_gross:.2f} (diff: {diff_pct:.1f}%)"
+            else:
+                approved = True
+        else:
+            approved = confidence == "high"
+            if not approved:
+                rejection_reason = "Insufficient months for approval"
+        
+        return SalaryAnalysis(
+            detected_amount=round(average_monthly, 2),
+            confidence=confidence,
+            income_type=IncomeType.SELF_EMPLOYED,
+            transactions_analyzed=len(credits),
+            clusters_found=months_detected,
+            best_candidates=credits[:10],  # Show sample transactions
+            expected_salary=expected_gross,
+            months_detected=months_detected,
+            approved=approved,
+            rejection_reason=rejection_reason
+        )
+    
     def _normalize_source(self, tx: Transaction) -> str:
         """Normalize transaction source for grouping"""
         if tx.payer:
-            return re.sub(r'[^a-zA-Z0-9]', '', tx.payer.upper())
+            # Keep Thai characters, remove only special chars
+            # Thai Unicode range: \u0E00-\u0E7F
+            normalized = re.sub(r'[^\u0E00-\u0E7Fa-zA-Z0-9]', '', tx.payer.upper())
+            # If result is empty after normalization, use original
+            if not normalized:
+                normalized = "UNKNOWN"
+            print(f"[NORMALIZE_SOURCE] payer='{tx.payer}' → '{normalized}' (amt: {tx.amount})")
+            return normalized
         
         desc = tx.description.upper()
         
@@ -240,6 +379,17 @@ class ThaiSalaryAnalyzer(ISalaryAnalyzer):
         elif stability <= self.AMOUNT_STABILITY_THRESHOLD:
             score += self.AMOUNT_STABILITY_SCORE - 1
         
+        # Amount magnitude - NEW: Bonus for higher amounts (likely salary)
+        avg_amount = sum(amounts) / len(amounts) if amounts else 0
+        if avg_amount >= 50000:  # Likely salary range
+            score += 8  # High bonus
+        elif avg_amount >= 20000:
+            score += 5  # Medium bonus
+        elif avg_amount >= 10000:
+            score += 3  # Small bonus
+        elif avg_amount < 1000:
+            score -= 5  # Penalty for very small amounts (likely not salary)
+        
         # Payroll time
         payroll_count = sum(1 for tx in transactions if self._is_payroll_time(tx))
         if payroll_count >= len(transactions) * 0.5:
@@ -267,6 +417,10 @@ class ThaiSalaryAnalyzer(ISalaryAnalyzer):
         """Detect monthly salary pattern using 6-month logic"""
         source_groups = self._group_by_source(credits)
         
+        print(f"\n[SALARY_DETECT] Total sources: {len(source_groups)}")
+        for src, txs in list(source_groups.items())[:10]:
+            print(f"  - {src}: {len(txs)} txs, amounts: {[tx.amount for tx in txs[:3]]}")
+        
         best_group = None
         best_score = 0
         
@@ -275,6 +429,7 @@ class ThaiSalaryAnalyzer(ISalaryAnalyzer):
                 continue
             
             score = self._score_salary_group(txs, employer)
+            print(f"[SCORE] source='{source}' txs={len(txs)} score={score:.2f}")
             
             if score > best_score:
                 best_score = score
@@ -290,6 +445,8 @@ class ThaiSalaryAnalyzer(ISalaryAnalyzer):
         
         amounts = [tx.amount for tx in best_group["transactions"]]
         best_group["monthly_net_median"] = statistics.median(amounts)
+        
+        print(f"\n[BEST_GROUP] source='{best_group['source']}' months={best_group['months_detected']} median={best_group['monthly_net_median']:.2f}")
         
         return best_group
     

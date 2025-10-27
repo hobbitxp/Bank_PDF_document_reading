@@ -51,6 +51,7 @@ class PostgresDatabase(IDatabase):
         user_id: str,
         detected_salary: Optional[float],
         confidence: str,
+        income_type: str,
         transactions_analyzed: int,
         credit_transactions: int,
         debit_transactions: int,
@@ -79,7 +80,7 @@ class PostgresDatabase(IDatabase):
         
         query = """
             INSERT INTO analyses (
-                user_id, detected_salary, confidence, transactions_analyzed,
+                user_id, detected_salary, confidence, income_type, transactions_analyzed,
                 credit_transactions, debit_transactions, clusters_found,
                 months_detected, approved, rejection_reason,
                 top_candidates_count, expected_gross, matches_expected,
@@ -89,7 +90,7 @@ class PostgresDatabase(IDatabase):
             ) VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
                 $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-                $21, $22, NOW()
+                $21, $22, $23, NOW()
             )
             RETURNING id
         """
@@ -100,6 +101,7 @@ class PostgresDatabase(IDatabase):
                 user_id,
                 detected_salary,
                 confidence,
+                income_type,
                 transactions_analyzed,
                 credit_transactions,
                 debit_transactions,

@@ -5,6 +5,7 @@ Domain Entity: Salary Analysis Result
 from dataclasses import dataclass, field
 from typing import Optional
 from .transaction import Transaction
+from ..enums import IncomeType
 
 
 @dataclass
@@ -15,6 +16,7 @@ class SalaryAnalysis:
     confidence: str  # 'high', 'medium', 'low'
     transactions_analyzed: int
     clusters_found: int
+    income_type: IncomeType = IncomeType.SALARIED  # Type of income detected
     best_candidates: list[Transaction] = field(default_factory=list)
     all_scored_transactions: list[Transaction] = field(default_factory=list)
     expected_salary: Optional[float] = None
@@ -48,6 +50,7 @@ class SalaryAnalysis:
         return {
             "salary_detected": self.detected_amount,
             "confidence": self.confidence,
+            "income_type": self.income_type.value,
             "transactions_analyzed": self.transactions_analyzed,
             "clusters_found": self.clusters_found,
             "months_detected": self.months_detected,

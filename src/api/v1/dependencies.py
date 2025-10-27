@@ -5,13 +5,20 @@ API Dependencies: Dependency Injection Container
 import os
 from functools import lru_cache
 
+from typing import Optional
+
 from application.ports.pdf_extractor import IPDFExtractor
 from application.ports.data_masker import IDataMasker
 from application.ports.salary_analyzer import ISalaryAnalyzer
 from application.ports.storage import IStorage
 from application.ports.database import IDatabase
 from application.use_cases.analyze_statement import AnalyzeStatementUseCase
-from infrastructure.pdf.pymupdf_extractor import PyMuPDFExtractor
+from infrastructure.pdf.kbank_extractor import KBankPDFExtractor
+from infrastructure.pdf.ktb_extractor import KTBPDFExtractor
+from infrastructure.pdf.ttb_extractor import TTBPDFExtractor
+from infrastructure.pdf.scb_extractor import SCBPDFExtractor
+from infrastructure.pdf.bbl_extractor import BangkokBankPDFExtractor
+from infrastructure.pdf.bank_detector import BankDetector
 from infrastructure.masking.regex_masker import RegexDataMasker
 from infrastructure.analysis.thai_analyzer import ThaiSalaryAnalyzer
 from infrastructure.storage.s3_storage import S3Storage, LocalStorage
@@ -47,10 +54,34 @@ async def close_database():
         _database_instance = None
 
 
-@lru_cache()
-def get_pdf_extractor() -> IPDFExtractor:
-    """Get PDF extractor implementation"""
-    return PyMuPDFExtractor()
+def get_pdf_extractor(pdf_path: str, password: Optional[str] = None) -> IPDFExtractor:
+    """
+    Factory function to get appropriate PDF extractor based on bank detection
+    
+    Args:
+        pdf_path: Path to PDF file for bank detection
+        password: PDF password (if encrypted)
+    
+    Returns:
+        Appropriate extractor (KTBPDFExtractor, KBankPDFExtractor, TTBPDFExtractor, etc.)
+    """
+    bank = BankDetector.detect_bank(pdf_path, password)
+    
+    print(f"[BANK_DETECT] Detected: {bank}")
+    
+    if bank == "KTB":
+        return KTBPDFExtractor()
+    elif bank == "KBANK":
+        return KBankPDFExtractor()  # KBank parser (state machine)
+    elif bank == "TMB":
+        return TTBPDFExtractor()  # TMB/TTB parser
+    elif bank == "SCB":
+        return SCBPDFExtractor()  # SCB parser
+    elif bank == "BBL":
+        return BangkokBankPDFExtractor()  # Bangkok Bank parser
+    else:
+        print(f"[WARN] Unknown bank '{bank}', using KBank parser as fallback")
+        return KBankPDFExtractor()
 
 
 @lru_cache()

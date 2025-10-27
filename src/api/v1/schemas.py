@@ -47,6 +47,7 @@ class AnalysisSchema(BaseModel):
     
     detected_amount: float
     confidence: str
+    income_type: str
     transactions_analyzed: int
     clusters_found: int
     months_detected: int

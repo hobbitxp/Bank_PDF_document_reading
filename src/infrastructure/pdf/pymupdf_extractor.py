@@ -1,6 +1,14 @@
 """
 Infrastructure Adapter: PyMuPDF Extractor
 Implements IPDFExtractor using PyMuPDF (fitz) library
+
+เวอร์ชันนี้ออกแบบมาเพื่อรองรับ statement รูปแบบ KBank Mobile/K PLUS
+โดยใช้ state machine ดึงแต่ละธุรกรรมแบบ block:
+
+[วันที่] -> [เวลา] -> [ช่องทาง (อาจหลายบรรทัด)] -> [ยอดคงเหลือหลังรายการ]
+-> [รายละเอียดหลายบรรทัด] -> [ประเภทธุรกรรม] -> [จำนวนเงินของรายการ]
+
+พร้อมระบุเดบิต / เครดิต ชัดเจน
 """
 
 import re
@@ -18,14 +26,24 @@ logger = logging.getLogger(__name__)
 
 
 class PyMuPDFExtractor(IPDFExtractor):
-    """PDF extraction using PyMuPDF (fitz)"""
-    
+    """
+    PDF extraction using PyMuPDF (fitz) + KBank statement state machine parser
+    """
+
+    # =========================
+    # -------- PUBLIC ---------
+    # =========================
+
     def extract(self, pdf_path: str, password: Optional[str] = None) -> Statement:
-        """Extract text and transactions from PDF"""
-        
+        """
+        Extract text and transactions from a PDF statement.
+        Returns a Statement entity containing pages + all parsed Transaction objects.
+        """
+
+        # --- เปิดไฟล์ PDF ---
         doc = fitz.open(pdf_path)
-        
-        # Handle encrypted PDFs
+
+        # --- จัดการกรณีไฟล์ล็อก ---
         if doc.is_encrypted:
             if password:
                 if not doc.authenticate(password):
@@ -34,198 +52,309 @@ class PyMuPDFExtractor(IPDFExtractor):
             else:
                 doc.close()
                 raise ValueError("PDF มีการป้องกันด้วยรหัสผ่าน กรุณาระบุรหัสผ่าน")
-        
-        # Create statement entity
+
+        # --- เตรียม Statement domain entity ---
         statement = Statement(
             source_file=Path(pdf_path).name,
             total_pages=len(doc),
             extracted_at=datetime.now(),
             pages=[]
         )
-        
-        # Extract text from each page
-        for page_num in range(len(doc)):
-            page = doc[page_num]
+
+        # --- วนทุกหน้า ---
+        for page_index in range(len(doc)):
+            page = doc[page_index]
             text = page.get_text()
-            lines = text.split('\n')
-            
+            lines = [ln for ln in text.split("\n") if ln.strip()]
+
+            # เก็บ raw text เข้า statement.pages เพื่อ debug / เก็บหลักฐาน
             statement.pages.append({
-                "page_number": page_num + 1,
+                "page_number": page_index + 1,
                 "text": text,
-                "lines": [line for line in lines if line.strip()]
+                "lines": lines,
             })
-            
-            # Extract transactions from this page
-            transactions = self._extract_transactions_from_text(
-                text, page_num + 1
+
+            # สกัดธุรกรรมจากหน้านี้
+            page_transactions = self._extract_transactions_from_text(
+                lines=lines,
+                page_num=page_index + 1,
             )
-            for tx in transactions:
+
+            # ใส่เข้า statement
+            for tx in page_transactions:
                 statement.add_transaction(tx)
-        
+
         doc.close()
         return statement
-    
+
+    # =========================
+    # ------- INTERNAL --------
+    # =========================
+
+    # ---------- REGEX / CONSTANTS ----------
+    DATE_RE = re.compile(r"^\d{2}-\d{2}-\d{2}$")             # เช่น "01-04-25"
+    TIME_RE = re.compile(r"^\d{2}:\d{2}$")                    # เช่น "05:27"
+    MONEY_RE = re.compile(r"^\d{1,3}(?:,\d{3})*\.\d{2}$")     # เช่น "12,278.00" หรือ "875.50"
+
+    # ธนาคารใช้คำเหล่านี้เป็น "ประเภทธุรกรรม" (tx_type)
+    TX_TYPE_KEYWORDS_DEBIT = {
+        "ชำระเงิน",        # จ่ายบิล / จ่ายร้าน
+        "โอนเงิน",        # โอนไป ...
+        "ถอนเงินสด",       # กดเงิน
+    }
+    TX_TYPE_KEYWORDS_CREDIT = {
+        "รับโอนเงิน",          # รับโอนเงิน
+        "รับโอนเงินอัตโนมัติ",  # เงินเดือน/Payroll
+        "รับโอนเงินผ่าน QR",   # รับผ่าน QR
+    }
+    TX_TYPE_KEYWORDS_ALL = TX_TYPE_KEYWORDS_DEBIT | TX_TYPE_KEYWORDS_CREDIT
+
+    # ---------- PUBLIC HELPER ----------
     def _extract_transactions_from_text(
-        self, 
-        text: str, 
+        self,
+        lines: List[str],
         page_num: int
-    ) -> list[Transaction]:
-        """Extract transaction entities from page text"""
+    ) -> List[Transaction]:
+        """
+        Core entry for per-page parsing.
+        ตอนนี้เราทำ parser แบบ state machine สำหรับรูปแบบสเตทเมนต์ของ KBank Mobile/K PLUS
+        """
+
+        logger.debug(f"[extract_page] page={page_num} lines={len(lines)}")
+
+        txs = self._parse_kbank_page(lines, page_num)
+        logger.debug(f"[extract_page] page={page_num} parsed_tx={len(txs)}")
+
+        return txs
+
+    # ---------- LOW LEVEL HELPERS ----------
+
+    def _parse_money(self, money_str: str) -> float:
+        """
+        '12,278.00' -> 12278.00 (float)
+        """
+        return float(money_str.replace(",", ""))
+
+    def _extract_payer_from_desc(self, desc_lines: List[str]) -> Optional[str]:
+        """
+        พยายามดึงผู้โอน / ผู้จ่ายฝั่งเครดิต จากบรรทัดที่ขึ้นต้นด้วย "จาก ..."
+
+        ตัวอย่าง:
+          "จาก SCB X5247 นาย กฤษฎา รักเพื่++"           → "SCB"
+          "จาก SMART SCBT X1690 *BOOTS RETAIL (T) ++"  → "SMART SCBT"
+          "จาก X5027 MR. JAYARAJ  NIRMA++"              → fallback
+        """
+
+        # รวม desc_lines ทั้งหมดเป็น block เดียว
+        full_desc = " ".join(desc_lines)
         
-        transactions = []
-        lines = text.split('\n')
+        # ลองหา "จาก XXX" ก่อน
+        if "จาก" not in full_desc:
+            return None
         
-        # Transaction patterns
-        amount_pattern = r"(\d{1,3}(?:,\d{3})*\.\d{2})"
-        credit_patterns = [
-            # Thai patterns
-            "รับโอนเงิน", "ฝากเงิน", "เงินโอนเข้า", 
-            "เงินเดือน", "BSD02", "(BSD02)",
-            "รับโอนเงินผ่าน QR", "โอนเข้า",
-            "IORSDT", "(IORSDT)",  # KTB: เงินโอนเข้า
-            "ฝากเงินสด", "ฝาก", "เงินเข้า",
-            # English patterns
-            "TRANSFER IN", "RECEIVE", "DEPOSIT",
-            "SAL", "SALARY", "PAY", "PAYMENT RECEIVED",
-            "INCOMING", "CREDIT"
-        ]
+        # Extract ส่วนหลัง "จาก"
+        parts = full_desc.split("จาก", 1)
+        if len(parts) < 2:
+            return None
         
-        debit_patterns = [
-            "จ่ายค่า", "โอนเงินออก", "ถอนเงิน",
-            "NBSWP", "MORWSW", "CGSWP", "MORPSW",  # KTB transaction codes
-            "MORISW", "NMIDSW"
-        ]
+        after_jak = parts[1].strip()
         
-        logger.debug(f"Processing page {page_num} with {len(lines)} lines")
+        # ตัด ++ และอักขระพิเศษออก
+        after_jak = re.sub(r"\+\+.*$", "", after_jak).strip()
         
-        credit_count = 0
-        debit_count = 0
+        # ตัดที่ " X####" (account number)
+        if " X" in after_jak:
+            before_x = after_jak.split(" X")[0].strip()
+            # ถ้ามีชื่อยาวพอ (>= 3 ตัวอักษร) ให้ใช้
+            if len(before_x) >= 3:
+                print(f"[PAYER_EXTRACT] full_desc='{full_desc[:60]}...' → payer='{before_x}'")
+                return before_x
         
-        # Track transaction codes to avoid treating consecutive amounts as duplicates
-        transaction_codes = ["BSD02", "IORSDT", "MORWSW", "MORPSW", "NBSWP", "NMIDSW", "CGSWP", "MORISW"]
-        processed_lines = set()  # Track processed balance lines
-        
-        for idx, line in enumerate(lines):
-            # Skip if already processed as balance
-            if idx in processed_lines:
+        # Fallback: ใช้คำแรกหลัง "จาก" (เช่น "SCB", "BBL", "KTB")
+        first_word = after_jak.split()[0] if after_jak.split() else None
+        if first_word:
+            print(f"[PAYER_EXTRACT_FALLBACK] full_desc='{full_desc[:60]}...' → payer='{first_word}'")
+        return first_word
+
+    def _is_carry_forward_block(
+        self,
+        lines: List[str],
+        i: int
+    ) -> bool:
+        """
+        ตรวจ pattern 'ยอดยกมา' / 'ยอดยกไป' ที่ขึ้นต้นหน้าใหม่
+        รูปแบบ:
+            [DD-MM-YY]
+            [BALANCE_AFTER]
+            ยอดยกมา
+        """
+
+        if i + 2 >= len(lines):
+            return False
+
+        date_line = lines[i].strip()
+        bal_line = lines[i + 1].strip()
+        next_line = lines[i + 2].strip()
+
+        if not self.DATE_RE.match(date_line):
+            return False
+        if not self.MONEY_RE.match(bal_line):
+            return False
+        if "ยอดยกมา" in next_line or "ยอดยกไป" in next_line:
+            return True
+
+        return False
+
+    def _parse_kbank_page(
+        self,
+        lines: List[str],
+        page_num: int
+    ) -> List[Transaction]:
+        """
+        State machine สำหรับหน้าเดียวของ statement KBank
+        """
+
+        txs: List[Transaction] = []
+        i = 0
+        n = len(lines)
+
+        while i < n:
+            line = lines[i].strip()
+
+            # หาบรรทัดที่เป็นวันที่ (เช่น "01-04-25")
+            if not self.DATE_RE.match(line):
+                i += 1
                 continue
-            
-            # Find amounts in line
-            amounts = re.findall(amount_pattern, line)
-            if not amounts:
+
+            start_idx = i  # เก็บ index บรรทัดแรกของ block (ใช้เป็น line_index ใน Transaction)
+            date_str = line
+            i += 1
+            if i >= n:
+                break
+
+            # ----- เช็ค carry forward "ยอดยกมา" / "ยอดยกไป" -----
+            # รูปแบบที่ขึ้นต้นหน้าใหม่:
+            #   05-04-25
+            #   5,575.20
+            #   ยอดยกมา
+            #   06-04-25
+            if self._is_carry_forward_block(lines, start_idx):
+                # skip block 'ยอดยกมา'
+                i = start_idx + 3
                 continue
-            
-            # Check if this is a balance line (appears right after transaction amount)
-            # Balance = transaction + small difference, appears on next line
-            if idx > 0:
-                prev_amounts = re.findall(amount_pattern, lines[idx-1])
-                if prev_amounts and len(amounts) == 1 and len(prev_amounts) == 1:
-                    try:
-                        current_val = float(amounts[0].replace(',', ''))
-                        prev_val = float(prev_amounts[0].replace(',', ''))
-                        
-                        # Balance is typically slightly higher than transaction (accumulated)
-                        # and differs by less than 10%
-                        if current_val > prev_val and (current_val - prev_val) / prev_val < 0.1:
-                            processed_lines.add(idx)
-                            continue
-                    except:
-                        pass
-            
-            # Check if credit transaction - ตรวจสอบ 2 บรรทัดก่อนหน้า และ 5 บรรทัดถัดไป
-            context_start = max(0, idx-2)
-            context_end = min(idx+6, len(lines))
-            context_lines = '\n'.join(lines[context_start:context_end])
-            
-            # Check for specific transaction codes first (most reliable)
-            specific_credit_codes = ["BSD02", "IORSDT"]
-            specific_debit_codes = ["NBSWP", "MORWSW", "CGSWP", "MORPSW", "MORISW", "NMIDSW"]
-            
-            # Look in closer context (2 lines before, 1 line after) for transaction codes
-            # Transaction code typically appears 1-2 lines before the amount
-            close_context = '\n'.join(lines[max(0,idx-3):min(len(lines),idx+2)])
-            
-            has_credit_code = any(code in close_context for code in specific_credit_codes)
-            has_debit_code = any(code in close_context for code in specific_debit_codes)
-            
-            if has_credit_code and not has_debit_code:
+
+            # ----- TIME -----
+            time_str = None
+            if i < n and self.TIME_RE.match(lines[i].strip()):
+                time_str = lines[i].strip()
+                i += 1
+
+            if i >= n:
+                break
+
+            # ----- CHANNEL -----
+            # channel อาจกินหลายบรรทัด (ATM ... / อีกบรรทัด / ฯลฯ)
+            # เราจะสะสมไปเรื่อยจนกว่าจะเจอเลขจำนวนเงิน (ซึ่งคือ balance_after)
+            channel_parts: List[str] = []
+            while i < n and not self.MONEY_RE.match(lines[i].strip()):
+                # ถ้าเจอวันที่ใหม่แบบสมบูรณ์ (ป้องกันฟอร์แมตพัง)
+                if self.DATE_RE.match(lines[i].strip()):
+                    # ฟอร์แมตไม่ครบ / ขาด balance -> เราจะถือว่า block นี้ invalid แล้ว break
+                    logger.debug(
+                        f"[page {page_num}] Encountered new date before balance; "
+                        f"aborting current block at line {i}"
+                    )
+                    break
+
+                channel_parts.append(lines[i].strip())
+                i += 1
+
+            if i >= n:
+                break
+
+            channel_str = " ".join(part for part in channel_parts if part)
+
+            # ----- BALANCE AFTER -----
+            balance_after = None
+            if i < n and self.MONEY_RE.match(lines[i].strip()):
+                balance_after = self._parse_money(lines[i].strip())
+                i += 1
+            else:
+                # ถ้าดันไม่เจอ balance หลัง channel ก็ถือว่าบล็อกนี้แตกกลางทาง -> ข้าม
+                logger.debug(
+                    f"[page {page_num}] Missing balance_after after channel at line {i}; skip block"
+                )
+                continue
+
+            # ----- DESCRIPTION LINES -----
+            # เก็บบรรทัดรายละเอียดจนกว่าจะเจอ tx_type (เช่น 'ชำระเงิน', 'โอนเงิน', 'ถอนเงินสด', 'รับโอนเงิน')
+            desc_lines: List[str] = []
+            tx_type: Optional[str] = None
+
+            while i < n:
+                candidate = lines[i].strip()
+
+                # ถ้าบรรทัดนี้เป็นประเภทธุรกรรม => จบ description
+                if candidate in self.TX_TYPE_KEYWORDS_ALL:
+                    tx_type = candidate
+                    i += 1  # ขยับให้ไปชี้บรรทัดจำนวนเงิน
+                    break
+
+                # ถ้าเจอวันที่ใหม่ก่อนเจอ tx_type แปลว่า block นี้อาจไม่สมบูรณ์
+                # --> เราจะหยุด block ตรงนี้เลย (tx_type = None)
+                if self.DATE_RE.match(candidate):
+                    logger.debug(
+                        f"[page {page_num}] Hit next date before tx_type at line {i}; "
+                        f"current block might be incomplete"
+                    )
+                    break
+
+                desc_lines.append(candidate)
+                i += 1
+
+            description = " ".join(seg for seg in desc_lines if seg)
+
+            # ----- AMOUNT (จำนวนเงินของรายการ) -----
+            amount_val: Optional[float] = None
+            if i < n and self.MONEY_RE.match(lines[i].strip()):
+                amount_val = self._parse_money(lines[i].strip())
+                i += 1
+            else:
+                # ถ้าไม่เจอจำนวนเงินบรรทัดสุดท้าย ก็ยังเก็บธุรกรรมได้
+                # แต่ amount จะเป็น None
+                pass
+
+            # ----- DETERMINE CREDIT / DEBIT -----
+            if tx_type in self.TX_TYPE_KEYWORDS_CREDIT:
                 is_credit = True
-            elif has_debit_code and not has_credit_code:
+            elif tx_type in self.TX_TYPE_KEYWORDS_DEBIT:
                 is_credit = False
             else:
-                # Fallback to pattern matching
-                is_debit = any(pattern in context_lines for pattern in debit_patterns)
-                if is_debit:
-                    is_credit = False
+                # fallback heuristic ถ้า tx_type ไม่เจอ (ไม่ควรเกิดใน statement ปกติ)
+                blob = f"{tx_type or ''} {description}"
+                if "รับโอนเงิน" in blob:
+                    is_credit = True
                 else:
-                    is_credit = any(pattern.lower() in context_lines.lower() for pattern in credit_patterns)
-            
-            if is_credit:
-                credit_count += 1
-            else:
-                debit_count += 1
-            
-            # Extract time if present
-            time_match = re.search(r"(\d{2}:\d{2})", context_lines)
-            time_str = time_match.group(1) if time_match else None
-            
-            # Extract date if present (DD/MM/YY or DD/MM/YYYY)
-            date_match = re.search(r"(\d{1,2}/\d{1,2}/\d{2,4})", context_lines)
-            date_str = date_match.group(1) if date_match else None
-            
-            # Extract channel
-            channel = None
-            if "(BSD02)" in context_lines or "BSD02" in context_lines:
-                channel = "BSD02"
-            elif "K PLUS" in context_lines:
-                channel = "K PLUS"
-            elif "Internet/Mobile" in context_lines:
-                channel = "Internet/Mobile"
-            
-            # Extract payer (simple heuristic) - หาในบรรทัดถัดไป
-            payer = None
-            for next_line in lines[idx+1:min(idx+4, len(lines))]:
-                # หาคำว่า "จาก" หรือชื่อที่เป็นตัวพิมพ์ใหญ่
-                if "จาก" in next_line or "KTB" in next_line or "SCB" in next_line:
-                    payer = next_line.strip()
-                    break
-                for word in next_line.split():
-                    if word.isupper() and len(word) > 3:
-                        payer = word
-                        break
-                if payer:
-                    break
-            
-            # รวมคำอธิบายจาก 2-3 บรรทัดก่อนหน้า (ที่มีชื่อ transaction type)
-            desc_start = max(0, idx-3)
-            desc_lines = []
-            for i in range(desc_start, idx):
-                line_text = lines[i].strip()
-                # Skip lines that are only numbers, dates, or empty
-                if line_text and not re.match(r'^[\d/:\s,\.]+$', line_text):
-                    desc_lines.append(line_text)
-            
-            description = ' | '.join(desc_lines[-2:]) if desc_lines else f"Transaction at line {idx}"  # Last 2 descriptive lines
-            
-            # Create transaction for each amount found
-            for amount_str in amounts:
-                try:
-                    amount = float(amount_str.replace(",", ""))
-                    
-                    transaction = Transaction(
-                        page=page_num,
-                        line_index=idx,
-                        amount=amount,
-                        description=description[:200],  # จำกัด 200 ตัวอักษร
-                        is_credit=is_credit,
-                        date=date_str,
-                        time=time_str,
-                        channel=channel,
-                        payer=payer
-                    )
-                    transactions.append(transaction)
-                    
-                except ValueError:
-                    continue
-        
-        return transactions
+                    is_credit = False  # สมมติเป็นเดบิต
+
+            # ----- PAYER -----
+            payer = self._extract_payer_from_desc(desc_lines)
+
+            # ----- สร้าง Transaction object -----
+            tx_obj = Transaction(
+                page=page_num,
+                line_index=start_idx,
+                date=date_str,
+                time=time_str,
+                channel=channel_str or None,
+                description=description or None,
+                amount=amount_val,
+                is_credit=is_credit,
+                payer=payer,
+            )
+
+            txs.append(tx_obj)
+
+            # ลูปต่อไปหา date ถัดไป
+
+        return txs
