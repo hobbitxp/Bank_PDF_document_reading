@@ -74,7 +74,7 @@ def convert_date_to_iso(date_str: str) -> str:
     return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
 
 
-@router.post("/analyze-statement-v2", response_model=AnalyzeResponseV2)
+@router.post("/analyze-statement-v2")
 async def analyze_statement_v2(
     pdf_file: UploadFile = File(..., description="Bank statement PDF file"),
     customer_id: str = Form(..., description="Customer identifier"),
