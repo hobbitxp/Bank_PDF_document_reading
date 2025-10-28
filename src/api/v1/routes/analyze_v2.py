@@ -66,16 +66,14 @@ def convert_date_to_iso(date_str: str) -> str:
     
     day, month, year = parts
     
-    # Convert 2-digit year to 4-digit
+    # Convert 2-digit year to 4-digit (assume Gregorian year)
     if len(year) == 2:
         year_int = int(year)
-        if year_int >= 50:  # 50-99 = 2550-2599 (Buddhist)
-            year = f"25{year}"
-        else:  # 00-49 = 2600-2649
-            year = f"26{year}"
+        # Assume all years 00-99 are 2000-2099 (Gregorian)
+        year = f"20{year}"
     
     # Convert Buddhist year to Gregorian (subtract 543)
-    if int(year) > 2500:
+    elif int(year) >= 2500:
         year = str(int(year) - 543)
     
     return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
@@ -150,33 +148,40 @@ async def analyze_statement_v2(
         # Get statistics from result
         stats = result.get("statistics", {})
         analysis = result.get("analysis", {})
+        csv_path = result.get("csv_path")
         
-        # Convert transactions to V2 format (simplified - use analysis data)
+        # Convert transactions from CSV to V2 format
         transactions_v2 = []
+        if csv_path and os.path.exists(csv_path):
+            try:
+                import csv
+                with open(csv_path, 'r', encoding='utf-8-sig') as csvfile:
+                    reader = csv.DictReader(csvfile)
+                    for row in reader:
+                        # Convert CSV row to TransactionV2Schema
+                        transactions_v2.append(TransactionV2Schema(
+                            date=convert_date_to_iso(row.get('date', '')),
+                            time=row.get('time', ''),
+                            description=row.get('description', ''),
+                            amount=float(row.get('amount', 0)),
+                            type=row.get('type', ''),
+                            balance=None,  # Not in CSV
+                            channel=row.get('channel'),
+                            counterparty=row.get('payer'),
+                            category=None  # Not available
+                        ))
+                print(f"[TRANSACTIONS] Loaded {len(transactions_v2)} transactions from CSV")
+            except Exception as e:
+                print(f"[TRANSACTIONS] Error reading CSV: {e}")
+                transactions_v2 = []
+        
         salary_credits = []
         
-        # Since transactions not in result, create minimal structure
-        # In production, would need to extract from PDF again or store in result
-        
-        # Calculate monthly summaries from available data
-        from collections import defaultdict
-        monthly_data = {}
-        
-        # Use months_detected to create monthly summaries
+        # Monthly summaries - empty for now (no transaction details available)
+        # Would need to extract actual transactions to populate this correctly
         months_detected = analysis.get("months_detected", 0)
         detected_amount = analysis.get("detected_amount", 0.0)
-        
-        # Generate placeholder monthly summaries
-        monthly_summaries = []
-        if months_detected > 0:
-            for i in range(months_detected):
-                monthly_summaries.append(MonthlySummarySchema(
-                    month=f"2025-{str(i+1).zfill(2)}",  # Placeholder
-                    totalCredit=detected_amount if income_type_enum == IncomeType.SALARIED else detected_amount,
-                    totalDebit=0.0,
-                    salaryCount=1 if income_type_enum == IncomeType.SALARIED else 0,
-                    cashDepositAmount=0.0
-                ))
+        monthly_summaries = []  # Empty - no real monthly breakdown available
         
         # Create salary credits from analysis
         if income_type_enum == IncomeType.SALARIED and detected_amount > 0:
@@ -247,16 +252,8 @@ async def analyze_statement_v2(
             monthlySummaries=monthly_summaries
         )
         
-        # Build payslip (if salaried)
-        payslips = []
-        if income_type_enum == IncomeType.SALARIED and salary_credits:
-            latest_salary = salary_credits[-1]
-            payslips.append(PayslipSchema(
-                salary=analysis.get("detected_amount", 0.0),
-                netSalary=latest_salary.amount,
-                employerName=latest_salary.employerName,
-                paydate=latest_salary.date
-            ))
+        # Build payslip (only if payslip file is uploaded - currently none)
+        payslips = []  # Empty - no payslip uploaded
         
         # Build analysis summary
         analysis_summary = AnalysisSummarySchema(

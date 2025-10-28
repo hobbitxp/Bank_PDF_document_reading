@@ -62,13 +62,22 @@ class AnalyzeStatementUseCase:
         
         # 1.1. Export transactions to CSV
         import os
+        import tempfile
         csv_filename = f"{user_id}_{timestamp.replace(':', '-').replace('.', '_')}_transactions.csv"
-        csv_path = os.path.join("/app/tmp", csv_filename)
+        
+        # Use /app/tmp in Docker, system temp in local
+        tmp_dir = "/app/tmp" if os.path.exists("/app/tmp") else tempfile.gettempdir()
+        os.makedirs(tmp_dir, exist_ok=True)
+        
+        csv_path = os.path.join(tmp_dir, csv_filename)
+        csv_export_success = False
         try:
             statement.to_csv(csv_path)
             print(f"[CSV_EXPORT] Saved: {csv_path}")
+            csv_export_success = True
         except Exception as e:
             print(f"[CSV_EXPORT] Error: {e}")
+            csv_path = None
         
         # 2. Mask sensitive data
         masked_statement, masking_mapping = self.data_masker.mask(statement)
@@ -257,5 +266,6 @@ class AnalyzeStatementUseCase:
                 "difference_percentage": analysis.difference_percentage
             },
             "pdf_storage_url": pdf_storage_url,
-            "database_saved": self.database is not None
+            "database_saved": self.database is not None,
+            "csv_path": csv_path if csv_export_success else None
         }
