@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-from api.v1.routes import health, analyze
+from api.v1.routes import health, analyze, analyze_v2
 from api.v1.dependencies import get_database, close_database
 
 
@@ -52,6 +52,7 @@ async def shutdown_event():
 # Include routers
 app.include_router(health.router, prefix="/api/v1", tags=["Health"])
 app.include_router(analyze.router, prefix="/api/v1", tags=["Analysis"])
+app.include_router(analyze_v2.router, prefix="/api/v1", tags=["Analysis V2"])
 
 
 @app.get("/")

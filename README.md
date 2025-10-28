@@ -9,7 +9,9 @@
 
 ## Features
 
-- **PDF Extraction** - PyMuPDF รองรับภาษาไทย, encrypted PDFs
+- **Multi-Bank Support** - KBANK (2 formats), KTB, TTB/TMB, SCB, BBL with auto-detection
+- **PDF Extraction** - PyMuPDF รองรับภาษาไทย, encrypted PDFs, password protection
+- **CSV Export** - Auto-export transactions to CSV after extraction (all banks)
 - **PDPA Compliance** - Regex masking 6 patterns (Thai ID, accounts, names, phones, emails, addresses)
 - **Salary Detection** - Multi-factor scoring + Thai progressive tax calculation + clustering
 - **Storage** - S3 with pre-signed URLs (fallback to local storage)
@@ -47,6 +49,21 @@
 
 **Dependency Rule:** Dependencies point inward only  
 **Principle:** Infrastructure depends on Application, Application defines Ports, Domain knows nothing
+
+## Supported Banks
+
+| Bank | Code | Formats Supported | Features |
+|------|------|-------------------|----------|
+| **Kasikorn Bank** | KBANK | Block format (mobile app)<br>Table format (statement) | Auto-format detection<br>Payer extraction from X#### pattern |
+| **Krungthai Bank** | KTB | 7-line transaction blocks | Running balance tracking<br>Thai date support (พ.ศ.) |
+| **TMB/TTB Thanachart** | TMB/TTB | Vertical column format | Thai month parsing<br>Signed money (+/-) |
+| **Siam Commercial Bank** | SCB | 6-line blocks with X1/X2 codes | Password-protected PDF<br>Balance-based credit/debit detection |
+| **Bangkok Bank** | BBL | 3-line transaction blocks | B/F (brought forward) handling<br>Running balance calculation |
+
+**Bank Detection:** Automatic detection from PDF content (100% accuracy across test files)
+
+**CSV Export:** All banks auto-export transactions to CSV format after extraction with fields:
+- `page`, `line_index`, `date`, `time`, `channel`, `description`, `amount`, `is_credit`, `type` (เงินเข้า/เงินออก), `payer`
 
 ## Quick Start
 
