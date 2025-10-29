@@ -1,0 +1,228 @@
+{
+  "project": "Bank Statement Analyzer",
+  "version": "3.0.0-hexagonal",
+  "last_updated": "2025-10-26",
+  "tasks": {
+    "completed": [
+      {
+        "id": 1,
+        "title": "Implement Hexagonal Architecture",
+        "description": "Complete 4-layer architecture (Domain, Application, Infrastructure, API)",
+        "status": "completed",
+        "date": "2025-10-25"
+      },
+      {
+        "id": 2,
+        "title": "Remove legacy code",
+        "description": "Delete 6 legacy scripts (analyze_salary, api_mobile, ask_claude, mask_data, process_statement, simple_pdf_to_json)",
+        "status": "completed",
+        "date": "2025-10-25"
+      },
+      {
+        "id": 3,
+        "title": "Update documentation",
+        "description": "Remove emoji icons from README.md and copilot-instructions.md per NO ICONS/EMOJIS POLICY",
+        "status": "completed",
+        "date": "2025-10-25"
+      },
+      {
+        "id": 4,
+        "title": "Setup AWS Configuration",
+        "description": "Create ~/.aws/config with region ap-southeast-1, install AWS CLI v2",
+        "status": "completed",
+        "date": "2025-10-25"
+      },
+      {
+        "id": 5,
+        "title": "Create S3 Bucket",
+        "description": "Create private S3 bucket (bank-statements-1761407671) with encryption and versioning",
+        "status": "completed",
+        "date": "2025-10-25"
+      },
+      {
+        "id": 6,
+        "title": "Database Schema Design",
+        "description": "Design PostgreSQL tables for storing analysis results, masked data, transactions, and audit logs",
+        "status": "completed",
+        "date": "2025-10-25",
+        "files_created": [
+          "database/schema.sql",
+          "database/queries.sql",
+          "database/README.md"
+        ],
+        "notes": "Created 2 tables (analyses, audit_logs) with privacy-first design. No transaction details stored. Metadata in JSONB format."
+      },
+      {
+        "id": 7,
+        "title": "Database Adapter Implementation",
+        "description": "Implement PostgresDatabase adapter with asyncpg for database operations",
+        "status": "completed",
+        "completed_date": "2025-10-26",
+        "priority": "high",
+        "dependencies": [6],
+        "estimated_hours": 6,
+        "files_to_create": [
+          "src/application/ports/database.py",
+          "src/infrastructure/database/postgres_adapter.py",
+          "src/infrastructure/database/__init__.py"
+        ],
+        "files_to_modify": [
+          "requirements.txt",
+          "src/config.py",
+          "src/api/v1/dependencies.py",
+          "src/main.py",
+          "src/api/v1/routes/health.py",
+          "src/api/v1/schemas.py"
+        ],
+        "notes": "✅ Created IDatabase port with 7 async methods. ✅ Implemented PostgresDatabase with connection pooling (5-20 connections). ✅ Added asyncpg>=0.29.0 to requirements.txt. ✅ Added DATABASE_URL configuration. ✅ Integrated with DI container and startup events. ✅ Updated health check to verify database connection."
+      },
+      {
+        "id": 7.5,
+        "title": "Create AI Instructions System",
+        "description": "Break down copilot-instructions.md into structured 7-file system for better AI navigation",
+        "status": "completed",
+        "completed_date": "2025-10-26",
+        "priority": "medium",
+        "dependencies": [],
+        "estimated_hours": 3,
+        "files_to_create": [
+          ".github/ai-instructions/00-START-HERE.md",
+          ".github/ai-instructions/01-WORKFLOW.md",
+          ".github/ai-instructions/02-ARCHITECTURE.md",
+          ".github/ai-instructions/03-DOMAIN-RULES.md",
+          ".github/ai-instructions/04-DEVELOPMENT.md",
+          ".github/ai-instructions/05-COMMON-ISSUES.md",
+          ".github/ai-instructions/06-CODE-STANDARDS.md"
+        ],
+        "files_to_modify": [
+          ".github/copilot-instructions.md"
+        ],
+        "notes": "✅ Created 7 instruction files (2,600+ lines total). ✅ Separated by concern: Navigation, Workflow, Architecture, Domain Rules, Development, Debugging, Code Standards. ✅ Updated master index with navigation system. ✅ Added announcement requirement for AI agents. ✅ Added verification questions and examples."
+      },
+      {
+        "id": 8,
+        "title": "Update Use Case for Database",
+        "description": "Modify AnalyzeStatementUseCase to save results to PostgreSQL instead of S3",
+        "status": "completed",
+        "completed_date": "2025-10-26",
+        "priority": "high",
+        "dependencies": [7],
+        "estimated_hours": 4,
+        "files_to_modify": [
+          "src/application/use_cases/analyze_statement.py",
+          "src/api/v1/routes/analyze.py",
+          "src/api/v1/schemas.py"
+        ],
+        "notes": "✅ Changed execute() to async. ✅ Added database: IDatabase parameter to constructor. ✅ Removed JSON file creation logic. ✅ Added database.save_analysis() with 19 parameters. ✅ Added database.save_audit_log() for tracking. ✅ Changed to upload only PDF to S3 (not JSON files). ✅ Updated response: analysis_id instead of statement_id, pdf_storage_url instead of storage_urls. ✅ Updated API route to inject database dependency. ✅ Updated AnalyzeResponse schema."
+      },
+      {
+        "id": 9,
+        "title": "Create Dockerfile for API",
+        "description": "Multi-stage Dockerfile with Python 3.12-slim, non-root user, optimized layers",
+        "status": "completed",
+        "completed_date": "2025-10-26",
+        "priority": "high",
+        "dependencies": [],
+        "estimated_hours": 3,
+        "files_created": [
+          "Dockerfile",
+          ".dockerignore"
+        ],
+        "notes": "✅ Multi-stage build (builder + runtime). ✅ Python 3.12-slim base image. ✅ Non-root user (appuser) for security. ✅ Optimized layer caching. ✅ Health check configured. ✅ PYTHONPATH=/app/src set. ✅ Working directory: /app/src. ✅ CMD: uvicorn main:app --host 0.0.0.0 --port 8001. ✅ Build tested and working."
+      },
+      {
+        "id": 10,
+        "title": "Create docker-compose.yml",
+        "description": "Docker Compose with api (FastAPI), db (PostgreSQL 15), optional localstack (S3)",
+        "status": "completed",
+        "completed_date": "2025-10-26",
+        "priority": "high",
+        "dependencies": [9],
+        "estimated_hours": 4,
+        "files_created": [
+          "docker-compose.yml",
+          "docker-compose.dev.yml",
+          "scripts/init-localstack.sh",
+          ".env.example (updated)"
+        ],
+        "notes": "✅ Production config (docker-compose.yml): api + db services. ✅ Development config (docker-compose.dev.yml): added localstack for S3. ✅ PostgreSQL 15-alpine with auto-init schema. ✅ Health checks for both services. ✅ Network: bank_network. ✅ Volumes: postgres_data. ✅ Environment variables via .env. ✅ Fixed dependencies.py: connection_string instead of database_url. ✅ Services tested: API healthy on port 8001, DB healthy on port 5432."
+      },
+      {
+        "id": 11,
+        "title": "Database Migration Setup",
+        "description": "Setup Alembic for database migrations with version control",
+        "status": "completed",
+        "date": "2025-10-26",
+        "priority": "medium",
+        "dependencies": [6],
+        "estimated_hours": 3,
+        "files_created": [
+          "alembic.ini",
+          "alembic/env.py",
+          "alembic/script.py.mako",
+          "alembic/versions/001_initial.py",
+          "database/MIGRATIONS.md",
+          "scripts/run_migrations.py",
+          "tests/test_migrations.py"
+        ],
+        "notes": "✅ Alembic 1.13.0 installed with psycopg2-binary for sync migrations. ✅ Initial migration (001_initial) created matching schema.sql. ✅ Migration environment configured for PostgreSQL. ✅ Integration tests written for upgrade/downgrade. ✅ Documentation: database/MIGRATIONS.md with usage guide. ✅ Helper script: scripts/run_migrations.py for easy execution. ✅ README.md updated with migration instructions. ✅ Supports both Docker and local development."
+      },
+      {
+        "id": 12,
+        "title": "Environment Configuration",
+        "description": "Create .env files for different environments (dev, staging, prod)",
+        "status": "completed",
+        "completed_date": "2025-10-26",
+        "priority": "medium",
+        "dependencies": [],
+        "estimated_hours": 2,
+        "files_created": [
+          ".env.dev",
+          ".env.staging",
+          ".env.prod"
+        ],
+        "files_modified": [
+          ".env.example"
+        ],
+  "notes": "✅ Created .env.dev (local dev defaults). ✅ Created .env.staging (non-production mirror). ✅ Created .env.prod (deployment template). ✅ Updated .env.example to reference profiles. ✅ docker compose --env-file .env.dev|.env.staging|.env.prod config (warnings only about version field)."
+      },
+      {
+        "id": 14,
+        "title": "API Testing with Docker",
+        "description": "Test full stack with docker-compose (API + DB + S3)",
+        "status": "completed",
+        "completed_date": "2025-10-26",
+        "priority": "high",
+        "dependencies": [10, 8],
+        "estimated_hours": 4,
+        "notes": "✅ ./scripts/test_api_integration.sh: Tests Run=7, Passed=23, Failed=0 (API+DB docker stack)."
+      }
+    ],
+    "in_progress": [],
+    "pending": [
+      {
+        "id": 13,
+        "title": "Web Service (Optional)",
+        "description": "Decide if web service is needed (admin dashboard, monitoring UI)",
+        "priority": "low",
+        "dependencies": [],
+        "estimated_hours": 16,
+        "notes": "To be decided if needed"
+      },
+      {
+        "id": 15,
+        "title": "Production Deployment",
+        "description": "Deploy to production environment (AWS ECS/EC2 or similar)",
+        "priority": "medium",
+        "dependencies": [14],
+        "estimated_hours": 8
+      }
+    ]
+  },
+  "notes": {
+    "s3_usage": "S3 bucket (bank-statements-1761407671) stores only original PDF files, not JSON results",
+    "database_storage": "PostgreSQL will store: masked_data, analysis_results, transactions, audit_logs",
+    "architecture": "Hexagonal Architecture with 31 Python files across 4 layers",
+    "no_icons_policy": "Never use emoji icons in documentation (README, comments, copilot-instructions)"
+  }
+}
